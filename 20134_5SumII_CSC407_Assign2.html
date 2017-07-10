@@ -1,0 +1,564 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html><head></head><body>
+ 
+ 
+ 
+ 
+
+ 
+  <center>
+  <h2>CSC 407: Computer Systems II: 2014 Summer II, Assignment #2</h2>
+  <p>Last Modified 2014 July 29</p>
+  </center>
+
+  <h4>Purpose:</h4>
+  To go over <em>processes</em> and <em>signals</em>.
+
+  <h4>Assignment:</h4>
+    <p>A major North American metropolitan area received more snow than it is usd to.
+       Now there are several victims stuck on an important road in the city.
+    </p>
+
+    <p>You are the head of the Department of Transportation, and it is your job to tell your snowplows to rescue them.
+    </p>
+
+    <p>
+      <ol type="A">
+	<li>(50 Points) Write <code>deptOfTrans.c</code></li>
+	<li>(40 Points) Write <code>rescuingPlow.c</code></li>
+	<li>(10 Points) You might find cases where the plows report that they saved more than <code>NUM_VICTIMS_TO_RESCUE</code> victims in total:
+<pre>
+Plow id 3333 rescued 11 victims.
+Plow id 3334 rescued 11 victims.
+Plow id 3331 rescued 11 victims.
+Plow id 3332 rescued 11 victims.
+Ready for the NEXT snow storm!
+</pre>
+            <em>How can this be?</em><br/>
+	    <strong>Hint!</strong> Are signals buffered?</li>
+      </ol>
+    </p>
+
+
+    <p>
+      <code>deptOfTrans.c</code> will make between 1 and <code>MAX_NUM_RESCUE_PLOWS rescuingPlow</code> processes.
+      Each will report that it has rescued a victim at a random interval by sending a <code>SIGUSR1</code> signal.
+      The parent process will count the number of <code>SIGUSR1</code> signals it receives.
+      When it has rescued all <code>NUM_VICTIMS_TO_RESCUE</code> it will:
+      <ol type="1">
+      <li>Send <code>SIGTERM</code> to all child processes.</li>
+      <li>Briefly <code>sleep()</code> to insure it has heard from all plows.</li>
+      <li>For each finished child, use <code>WEXITSTATUS(status)</code> to get and print the number of victims that that process rescued.</li>
+      </ol>
+      Then it will quit.
+<pre>
+/*
+ *	deptOfTrans.c
+ *
+ *	Compile with $ <em>gcc deptOfTrans.c -o deptOfTrans</em>
+ */
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/wait.h&gt;
+
+
+#define	TEXT_LEN		10
+#define MAX_NUM_RESCUE_PLOWS	4
+#define	NUM_VICTIMS_TO_RESCUE	40
+
+
+/*  PURPOSE:  To keep trap of the number of victims that have been rescued.
+ */
+int	numRescuedVictims	= 0;
+
+
+
+/*  PURPOSE:  To keep trap of the number of plow processes that currently exist.
+ */
+int	numPlowProcesses	= 0;
+
+
+
+/*  PURPOSE:  To keep track of the process id&#39;s of the rescuing snow plows.
+ */
+pid_t	plowPid[MAX_NUM_RESCUE_PLOWS];
+
+
+/*  PURPOSE:  To note that at least one child plow has finished.  Reports the
+ *	process id and the number of victims rescued for each child plow.
+ *	&#39;sigNum&#39; tells the signal number.  No return value
+ */
+<strong>//  You may want to define a SIGCHLD listener here
+//  It should have a loop that wait()s for children and
+//  and prints how many victims each has rescued.
+//  Each iteration of the loop should also decrement &#39;numPlowProcesses&#39;.</strong>
+
+
+
+/*  PURPOSE:  To handle being informed of a rescued victim.  &#39;sigNum&#39; tells
+ *	signal number.  No return value.
+ */
+<strong>//  You may want to define a SIGUSR1 listener here
+//  It increments &#39;numRescuedVictims&#39; and prints the total number rescued victims</strong>
+
+
+/*  PURPOSE:  To install the SIGUSR1 handler.  No parameters.  No return value.
+ */
+<strong>//  You may want to write a function that installs your SIGUSR1 handler
+//  here.</strong>
+
+
+/*  PURPOSE:  To install the SIGCHLD handler.  No parameters.  No return value.
+ */
+<strong>//  You may want to write a function that installs your SIGCHLD handler
+//  here.</strong>
+
+
+/*  PURPOSE:  To make between 1 and &#39;MAX_NUM_RESCUE_PLOWS&#39; processes to run
+ *	&#39;rescuingPlow&#39; to rescue stuck victims, and then tell them to quit
+ *	after all &#39;NUM_VICTIMS_TO_RESCUE&#39; victims have been rescued.  Ignores
+ *	parameters.  Returns &#39;EXIT_SUCCESS&#39; to OS.
+ */
+int	main ()
+{
+
+  //  I.  Applicability validity check:
+
+
+  //  II.  Rescue victims:
+  //  II.A.  Get number of plows to make:
+  char		text[TEXT_LEN];
+
+<strong>  //  Have a loop here that ask for a value for &#39;numPlowProcesses&#39;
+//  and allows values between 1 and &#39;MAX_NUM_RESCUE_PLOWS&#39; inclusive</strong>
+
+  //  II.B.  Install SIGUSR1 handler:
+<strong>  //  Call your SIGUSR1-installing function here</strong>
+
+  //  II.C.  Tell &#39;numPlowProcesses&#39; plows to start rescuing the victims:
+
+  int i;
+  int myPid	= getpid();
+
+  for  (i = 0;  i &lt; numPlowProcesses;  i++)
+  {<strong>
+    //  Do a fork() and save it in plowPid[i]
+
+    //  If plowPid[i] is less than 0 then do:
+      fprintf(stderr,&quot;Dude, your system is WAY to busy to play rescuer!\n&quot;);
+      return(EXIT_FAILURE);
+
+    //  If plowPid[i] is equal to 0 then do:
+      char	pidText[TEXT_LEN];
+      char	indexText[TEXT_LEN];
+
+      snprintf(pidText,TEXT_LEN,&quot;%d&quot;,myPid);
+      snprintf(indexText,TEXT_LEN,&quot;%d&quot;,i);
+      execl(&quot;./rescuingPlow&quot;,&quot;rescuingPlow&quot;,pidText,indexText,NULL);
+      fprintf(stderr,&quot;Dude, somebody stole my plow!!\n&quot;);
+      return(EXIT_FAILURE);</strong>
+  }
+
+  //  II.D.  Wait until all victims have been rescued:
+  while  (numRescuedVictims &lt; NUM_VICTIMS_TO_RESCUE)
+  {
+    sleep(1);
+    printf(&quot;Searching for victims . . .\n&quot;);
+  }
+
+  //  III.  Finished:
+<strong>  //  Loop to send SIGTERM to all &#39;numPlowProcesses&#39; plow processes</strong>
+
+<strong>  //  Call your SIGCHLD-installing function here</strong>
+
+  do
+  {
+    sleep(1);
+  }
+  while  (numPlowProcesses &gt; 0);
+
+  printf(&quot;Ready for the NEXT snow storm!\n&quot;);
+  return(EXIT_SUCCESS);
+}
+</pre>
+    </p>
+
+    <p><code>rescusingPlow.c</code> will get the pid of its parent (the <code>deptOfTrans</code> process) and its index number from the command line.
+      Before it starts plowing it will set up a listener for <code>SIGTERM</code>.
+      After the <code>deptOfTrans</code> tells that all victims have been rescued it (send it <code>SIGTERM</code>) it will <code>exit()</code> with the number of victims it has rescued.
+<pre>
+/*
+ *	rescuingPlow.c
+ *
+ *	Compile with $ <em>gcc rescuingPlow.c -o rescuingPlow</em>
+ */
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/wait.h&gt;
+
+
+/*  PURPOSE:  To keep track of the number of victims that this process
+ *	rescued.
+ */
+int	numVictimsRescued	= 0;
+
+
+
+/*  PURPOSE:  To return the number of victims rescued to the OS.  &#39;sigNum&#39;
+ *	tells the signal number.  No return value.
+ */
+<strong>//  You may want to write a SIGTERM handling function
+//  that returns to the OS &#39;numVictimsRescued&#39;.</strong>
+
+
+
+/*  PURPOSE:  To rescue victims at random intervals and inform parent process
+ *	by sending it SIGUSR1 until receiving SIGTERM.  First parameter (after
+ *	program name) tells parent&#39;s process id.  Second parameter tells this
+ *	plow&#39;s index.
+ */
+int	main	(int argc, char* argv[])
+{
+
+  //  I.  Applicability validity check:
+
+  pid_t	parentPID;
+  int	plowId;
+
+  if  (argc &lt; 3)
+  {
+    fprintf(stderr,&quot;USAGE: rescuingPlow &lt;parentPID&gt; &lt;plowId&gt;\n&quot;);
+    return(EXIT_FAILURE);
+  }
+
+  parentPID	= atoi(argv[1]);
+  plowId	= atoi(argv[2]);
+
+
+  //  II.  Rescuing victims until told to stop:
+
+  //  II.A.  Install signal handler:
+
+<strong>  //  Install your SIGTERM handler here</strong>
+  srand(plowId);  //  Uniquely initialize random number generator so they act independently of each other
+
+
+  //  II.B.  Rescue victims:
+
+<strong>  //  Write an endless loop that:
+  //  (1) Does &#39;sleep((rand() % 6) + 1);&#39;
+  //  (2) Increments &#39;numVictimsRescued&#39;
+  //  (3) Does &#39;printf(&quot;Plow %d rescued %d victim(s)!\n&quot;,plowId,numVictimsRescued);&#39;
+  //  (4) Send &#39;SIGUSR1&#39; to &#39;parentPID&#39;</strong>
+
+
+  //  III.  Finished:
+
+  return(EXIT_SUCCESS);
+}
+</pre>
+    </p>
+
+    <p><strong>Useful stuff</strong>
+      <table border="1">
+	<tr>
+	  <td>Function</td>
+	  <td>Purpose</td>
+	</tr>
+
+	<tr>
+	  <td>int fork()</td>
+	  <td>Attempts to make a child process.
+	      Return value is either:
+	    <ul>
+	      <li>Negative: no child process made (process table full?)
+	      </li><li>0: The process that receives 0 <em>is</em> the child process
+	      </li><li>Positive: The process that receives a positive number is the parent process.  The actual number is the process id of the child.
+	    </li></ul>
+	  </td>
+	</tr>
+
+	<tr>
+	  <td>int kill (int pid, int signalNum)</td>
+	  <td>Sends signal <code>signalNum</code> to process <code>pid</code>.
+	    Don&#39;t worry about the return number.
+	  </td>
+	</tr>
+
+	<tr>
+	  <td>
+<pre>
+struct sigaction	action;
+
+sigemptyset(&amp;action.sa_mask);
+action.sa_flags   = 0; // See notes
+action.sa_handler = simpleHandler;
+
+sigaction(int signalNum,&amp;action,NULL)
+</pre>
+	  </td>
+	  <td>
+	    Tells the OS that when this process receives signal <code>signalNum</code> it is to do function <code>simpleHandler</code>.
+	    <code>simpleHandler</code> should have form:
+<pre>
+void simpleHandler (int sigNum)
+</pre>
+	    <code>simpleHandler</code> can also be:
+	    <table border="1">
+	      <tr>
+		<th>Value</th>
+		<th>Meaning</th>
+	      </tr>
+
+	      <tr>
+		<td><code>SIG_IGN</code></td>
+		<td>&quot;Ignore this signal&quot;</td>
+	      </tr>
+
+	      <tr>
+		<td><code>SIG_DFL</code></td>
+		<td>&quot;Do the default action for this signal&quot;</td>
+	      </tr>
+	    </table>
+
+	  </td>
+	</tr>
+
+	<tr>
+	  <td>int wait(int* ptr)</td>
+	  <td>If this process has at least one child process still running then waits for it to finish.
+	      When it finally does finish (or if one had already finished) then sets <code>*ptr</code> equal to the status returned by the child and returns the process id of the child.
+	      The portion of the status that was <code>return()</code>ed by child&#39;s <code>main()</code>, or which the child <code>exit()</code>ed, is obtained by <code>WEXITSTATUS(childStatus)</code>
+	    <p>If there are no children for which to wait() then return 0.</p>
+	  </td>
+	</tr>
+
+	<tr>
+	  <td>void exit(int status)</td>
+	  <td>Ends the process and returns integer code <code>status</code> to the OS, which sends it to the parent process.
+	      The parent process can get this number with <code>WEXITSTATUS(status)</code></td>
+	</tr>
+
+
+      </table>
+    </p>
+
+    <p><strong>Sample Protocol (2 plow processes)</strong>
+<pre>
+deptOfTrans
+    |
+    |	(fork)			 process 0
+    +------------------------------&gt;+
+    |				    |
+    |				    |
+    |	(fork)			    |		 process 1
+    +----------------------------------------------&gt;+
+    |				    |		    |
+    |			    SIGUSR1 |		    |
+    |&lt;------------------------------+		    |
+    | numRescuedVictims++	    |		    |
+    |				    |		    |
+    |				    |	    SIGUSR1 |
+    |&lt;------------------------------|---------------+
+    | numRescuedVictims++	    |		    |
+    |				    |		    |
+    |				    |		    |
+    |				    |		    |
+    |				    |	    SIGUSR1 |
+    |&lt;------------------------------|---------------+
+    | numRescuedVictims++	    |		    |
+    |				    |		    |
+    |			    SIGUSR1 |		    |
+    |&lt;------------------------------+		    |
+    | numRescuedVictims++	    |		    |
+    |				    |		    |
+
+			    . . .
+
+    |				    |		    |
+    |&lt;------------------------------+		    |
+    | numRescuedVictims++	    |		    |
+    | (now numRescuedVictims	    |		    |
+    |  == NUM_VICTIMS_TO_RESCUE)    |		    |
+    |				    |		    |
+    | SIGTERM			    |		    |
+    +------------------------------&gt;|		    |
+    | SIGTERM			    |		    |
+    +----------------------------------------------&gt;|
+    |			    SIGCHLD |		    |
+    |&lt;------------------------------+		    |
+    |			      (end process)	    |
+    |					    SIGCHLD |
+    |&lt;----------------------------------------------+
+    |					      (end process)
+    +
+(end process)
+</pre>
+    </p>
+
+    <p><strong>Sample output</strong>
+<pre>
+[instructor@jphillipsCentOS6-5 Assign2]$ <strong>./deptOfTrans </strong>
+Please enter the number of plows to deploy (1-4): <strong>0</strong>
+Please enter the number of plows to deploy (1-4): <strong>5</strong>
+Please enter the number of plows to deploy (1-4): <strong>3</strong>
+Searching for victims . . .
+Plow 2 rescued 1 victim(s)!
+We&#39;ve rescued 1 victim(s) total!
+Searching for victims . . .
+Plow 1 rescued 1 victim(s)!
+Plow 0 rescued 1 victim(s)!
+We&#39;ve rescued 2 victim(s) total!
+We&#39;ve rescued 3 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 2 victim(s)!
+We&#39;ve rescued 4 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 3 victim(s)!
+We&#39;ve rescued 5 victim(s) total!
+Searching for victims . . .
+Plow 1 rescued 2 victim(s)!
+Plow 0 rescued 2 victim(s)!
+We&#39;ve rescued 6 victim(s) total!
+We&#39;ve rescued 7 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Plow 1 rescued 3 victim(s)!
+Plow 0 rescued 3 victim(s)!
+We&#39;ve rescued 8 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 4 victim(s)!
+We&#39;ve rescued 9 victim(s) total!
+Searching for victims . . .
+Plow 1 rescued 4 victim(s)!
+Plow 0 rescued 4 victim(s)!
+We&#39;ve rescued 10 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 5 victim(s)!
+We&#39;ve rescued 11 victim(s) total!
+Searching for victims . . .
+Plow 2 rescued 6 victim(s)!
+We&#39;ve rescued 12 victim(s) total!
+Searching for victims . . .
+Plow 2 rescued 7 victim(s)!
+We&#39;ve rescued 13 victim(s) total!
+Searching for victims . . .
+Plow 0 rescued 5 victim(s)!
+We&#39;ve rescued 14 victim(s) total!
+Plow 1 rescued 5 victim(s)!
+Searching for victims . . .
+We&#39;ve rescued 15 victim(s) total!
+Searching for victims . . .
+Plow 0 rescued 6 victim(s)!
+Plow 1 rescued 6 victim(s)!
+We&#39;ve rescued 16 victim(s) total!
+We&#39;ve rescued 17 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 8 victim(s)!
+We&#39;ve rescued 18 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 9 victim(s)!
+We&#39;ve rescued 19 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 0 rescued 7 victim(s)!
+Plow 1 rescued 7 victim(s)!
+We&#39;ve rescued 20 victim(s) total!
+We&#39;ve rescued 21 victim(s) total!
+Searching for victims . . .
+Plow 0 rescued 8 victim(s)!
+We&#39;ve rescued 22 victim(s) total!
+Plow 1 rescued 8 victim(s)!
+Searching for victims . . .
+We&#39;ve rescued 23 victim(s) total!
+Searching for victims . . .
+Plow 2 rescued 10 victim(s)!
+We&#39;ve rescued 24 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Plow 0 rescued 9 victim(s)!
+Plow 1 rescued 9 victim(s)!
+We&#39;ve rescued 25 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 0 rescued 10 victim(s)!
+Plow 1 rescued 10 victim(s)!
+We&#39;ve rescued 26 victim(s) total!
+We&#39;ve rescued 27 victim(s) total!
+Searching for victims . . .
+Plow 2 rescued 11 victim(s)!
+We&#39;ve rescued 28 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Plow 0 rescued 11 victim(s)!
+Plow 1 rescued 11 victim(s)!
+We&#39;ve rescued 29 victim(s) total!
+We&#39;ve rescued 30 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 12 victim(s)!
+We&#39;ve rescued 31 victim(s) total!
+Searching for victims . . .
+Plow 0 rescued 12 victim(s)!
+Plow 1 rescued 12 victim(s)!
+We&#39;ve rescued 32 victim(s) total!
+We&#39;ve rescued 33 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Plow 0 rescued 13 victim(s)!
+Plow 1 rescued 13 victim(s)!
+We&#39;ve rescued 34 victim(s) total!
+We&#39;ve rescued 35 victim(s) total!
+Searching for victims . . .
+Plow 2 rescued 13 victim(s)!
+We&#39;ve rescued 36 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 0 rescued 14 victim(s)!
+Plow 1 rescued 14 victim(s)!
+We&#39;ve rescued 37 victim(s) total!
+We&#39;ve rescued 38 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Searching for victims . . .
+Plow 2 rescued 14 victim(s)!
+We&#39;ve rescued 39 victim(s) total!
+Searching for victims . . .
+Searching for victims . . .
+Plow 0 rescued 15 victim(s)!
+Plow 1 rescued 15 victim(s)!
+We&#39;ve rescued 40 victim(s) total!
+We&#39;ve rescued 41 victim(s) total!
+Searching for victims . . .
+Plow id 3536 rescued 14 victims.
+Plow id 3535 rescued 15 victims.
+Plow id 3534 rescued 15 victims.
+Ready for the NEXT snow storm!
+[instructor@jphillipsCentOS6-5 Assign2]$ 
+</pre>
+    </p>
+ 
+
+<script type="text/javascript" src="/d2l/common/math/MathML.js?v=10.7.2.7100-324 "></script><script type="text/javascript">document.addEventListener('DOMContentLoaded', function() { D2LMathML.DesktopInit('https://s.brightspace.com/lib/mathjax/2.6.1/MathJax.js?config=MML_HTMLorMML','https://s.brightspace.com/lib/mathjax/2.6.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML'); });</script></body></html>

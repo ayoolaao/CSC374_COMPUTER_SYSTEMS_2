@@ -1,0 +1,895 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html><head></head><body>
+
+ 
+  
+  
+ 
+
+ 
+  <center>
+  <h2>CSC 407: Computer Systems II: 2014 Summer II, Assignment #4</h2>
+  <p>Last Modified 2014 August 18</p>
+  </center>
+
+  <h4>Purpose:</h4>
+   To practice programming:
+   <ol type="1">
+     <li>Linux sockets
+     </li><li>Linux file and directory I/O
+     </li><li>cursor control with ncurses (optional)
+   </li></ol>
+
+  <h4>Computing</h4>
+  <p>
+  Please <a rel="noopener" href="http://www.chiark.greenend.org.uk/~sgtatham/putty/download.html">ssh</a> into ctilinux1.cstcis.cti.depaul.edu, ctilinux2.cstcis.cti.depaul.edu or ctilinux3.cstcis.cti.depaul.edu.
+  Please be sure to run the client and server on the <b>same machine!</b>
+  A client has to know which machine has the server so it can properly connect.
+  </p>
+
+
+  <h4>Assignment: finish <code>babyFTPServer.cpp</code></h4>
+  <p>
+    In this assignment we&#39;ll finish a program that acts as a <em>very</em> simple <code>ftp</code> with just three commands:
+    <ul>
+      <li>list the files in the current directory</li>
+      <li>copy a remote file from the server to the client</li>
+      <li>quit</li>
+    </ul>
+  </p>
+
+  <p>
+    When it starts it is told the port to which its server socket should listen, and the password with which clients should authenticate.
+    It then waits for clients.
+    When one connects the main process <code>fork()</code>s a child process to handle the new client.
+    That child process handles the clients requests.
+    When the client requests to <code>quit</code> the child process ends.
+    The parent process uses its <code>SIGCHLD</code> handler to reap the child and report on its exit status.
+  </p>
+
+  <p>
+    All messages from client-to-server and server-to-client should be <code>MAX_LINE</code> characters long.
+  </p>
+
+  <h4>IMPORTANT!</h4>
+  <p>
+    <strong>When testing the &quot;get &lt;filename&gt;&quot; command, run the client and server in different directories.  Otherwise the client will over-write the file that the server reads!</strong>
+  </p>
+
+  Your job is to:
+  <ol type="1">
+    <li>Download from Desire2Learn my file <code>babyFTPClient.zip</code>.
+      (D2L would not let me upload an executable.)
+      On Windows, open the zip file and find my executable <code>babyFTPClient</code>
+      Upload the executable to your CDM Linux machine of your choice.
+      Now, on that Linux machine, do the following so the OS knows it&#39;s an executable:
+<pre>
+$ <b>chmod u+x babyFTPClient</b>
+</pre>
+      <p></p>
+
+    </li><li>Finish <code>main()</code>.
+      It should install <code>sigchld_handler()</code> as the handler for <code>SIGCHLD</code>.
+    </li>
+    <p></p>
+
+    <li>Finish <code>createListeningSocket()</code>.
+      It should create and return a server socket file descriptor that listens to port <code>port</code>.
+      It should prints an error message and return <code>-1</code> if it encounters a problem.
+      <p></p>
+    </li>
+
+    <li>Finish <code>obtainPassword()</code>.
+      It should obtain the password either from the file named <code>passwordFilename</code> or the keyboard.
+      The code for defining <code>passwordFilename</code> and for obtaining it from the keyboard is already there.
+      Add to it so that it attempts to read the file <code>passwordFilename</code>.
+      If it is unsuccessful then it asks the user with the keyboard.
+      <p></p>
+    </li>
+    
+    <li>Finish <code>didLogin()</code>.
+      <p>
+	This function <code>read()</code>s <code>MAX_LINE</code> characters from the client into a buffer and sees if it matches the server&#39;s password.
+	<ul>
+	  <li>If it does <em>not</em> match then it puts <code>BAD_PASSWORD_RESPONSE</code> into a buffer, sends <code>MAX_STRING</code> chars back to the client, and returns <code>false</code>.</li>
+	  <li>If it <em>does</em> match then it puts <code>GOOD_PASSWORD_RESPONSE</code> into a buffer, sends <code>MAX_STRING</code> chars back to the client, and returns <code>true</code>.</li>
+	 </ul>
+      </p>
+    </li>
+
+    <li>Finish <code>listDir()</code>.
+      <p>
+	It should iterate over all entries in the directory and send text descriptions of them to the client.
+	<ul>
+	  <li>For ordinary files it should print out both the filename and size.
+	    Use
+<pre>
+snprintf(buffer,MAX_LINE,&quot;%30s (%5d)&quot;,<i>yourFileNameVar</i>,<i>yourFileSizeVar</i>);
+</pre>
+	    to write into <code>buffer</code>.
+	    Then send <code>MAX_LINE</code> bytes of <code>buffer</code> to the client.
+	  </li><li>For directories it should print out the name.
+	    Use
+<pre>
+snprintf(buffer,MAX_LINE,&quot;%30s ( dir )&quot;,<i>yourFileNameVar</i>);
+</pre>
+	    to write into <code>buffer</code>.
+	    Then send <code>MAX_LINE</code> bytes of <code>buffer</code> to the client.
+	  </li><li>For anything else it should print out the name.
+	    Use
+<pre>
+snprintf(buffer,MAX_LINE,&quot;%30s (other)&quot;,<i>yourFileNameVar</i>);
+</pre>
+	    to write into <code>buffer</code>.
+	    Then send <code>MAX_LINE</code> bytes of <code>buffer</code> to the client.
+        </li></ul>
+      </p>
+
+      <p>
+        After sending all entries to the client it should
+      	Then
+	<ul>
+          <li>close the directory,</li>
+	  <li>put <code>END_RESPONSE</code> into <code>buffer</code>,
+	  </li><li>send <code>MAX_LINE</code> chars of the buffer to the client,
+        </li></ul>
+      </p>
+    </li>
+
+    <li>Finish <code>getFile()</code>.
+      <p>
+	This function should:
+	<ol type="1">
+	  <li>
+	    <code>read()</code> <code>MAX_LINE</code> chars from &#39;clientFD&#39;.
+	    This string tells the filename that the client wants.
+	  </li>
+	  <li>
+	    Attempt to open the file (for reading).
+	    If it can&#39;t be read then put <code>NO_FILE_RESPONSE</code> in a buffer of <code>MAX_LINE</code> chars, send it to the client, and <code>return</code>.
+	  </li>
+	  <li>
+	    Get the size of the file in bytes.
+	  </li>
+	  <li>
+	    Write the size into a buffer of size <code>MAX_LINE</code> chars as a decimal integer, and send the buffer to the client.
+	  </li>
+	  <li>
+	    Read all of the chars of the file and send them to the client.
+	  </li>
+	  <li>
+	    Close the file.
+	  </li>
+	</ol>
+      </p>
+    </li>
+
+    <li>Finish <code>sigchld_handler()</code>
+      <p>
+	Add this loop:
+<pre>
+while( (pid = waitpid(-1,&amp;status, WNOHANG)) &gt; 0)
+{
+  <strong>//  YOUR CODE</strong>
+}
+</pre>
+	<ul>
+	  <li>The <code>-1</code> means <em>&quot;Accept any child process&quot;</em></li>
+	  <li>The <code>&amp;status</code> means <em>&quot;Write the exit status into the address of (integer) variable <code>status</code>&quot;</em></li>
+	  <li>The <code>WNOHANG</code> means <em>&quot;If there are no more child processes for which to <code>wait()</code>, then just return <code>-1</code>&quot;</em></li>
+	</ul>
+
+	If the child process ends successfully do:
+<pre>
+printf(&quot;Process %d finished with return value %d\n&quot;,
+       &lt;childProcessesID&gt;,
+       &lt;childProcessesExitInteger&gt;
+      );
+</pre>
+	However, if the child process crashes, do:
+<pre>
+printf(&quot;Process %d crashed.\n&quot;,&lt;childProcessesID&gt;);
+</pre>
+      </p>
+    </li>
+  </ol>
+  <p>
+    <h3>Sample output (server):</h3>
+    <table border="1">
+      <tr>
+	<th>
+	  Server:<br/>
+	  (File <code>.babyFTPrc</code> has password <code>hi</code> in it)
+	</th>
+	<th>Client:</th>
+      </tr>
+      <tr>
+	<td>
+<pre>
+$ <strong>./babyFTPServer </strong>
+Desired port number? <strong>20202</strong>
+Process 3802 authenticating user . . .
+Process 3802 bad password.
+Process 3802 finished with return value 1
+</pre>
+	</td>
+	<td>
+<pre>
+Server name? <strong>localhost</strong>
+Server port? <strong>20202</strong>
+Password? ......  (<em>I typed the wrong password: <code>hello</code></em>)
+Bad password!
+Press enter
+(<em>I press <code>enter</code>,
+ the client ends but the server is still running</em>)
+</pre>
+	</td>
+      </tr>
+      <tr>
+	<td>
+<pre>
+Process 3805 authenticating user . . .
+Process 3805 good password.
+Process 3805 starting listing current directory.
+Process 3805 finished listing current directory.
+Process 3805 attempting to read file.
+Process 3805 cannot get file99.txt -- does not exist.
+Process 3805 attempting to read file.
+Process 3805 getting file0.txt.
+Process 3805 read file file0.txt.
+Process 3805 quitting.
+Process 3805 finished with return value 0
+</pre>
+	</td>
+	<td>
+<pre>
+Server name? <strong>localhost</strong>
+Server port? <strong>20202</strong>
+Password? <strong>...</strong>  (<em>I typed the correct password: <code>hi</code></em>)
+Login successful.
+
+What would you like to do?
+  list
+  get &lt;filename&gt;
+  put &lt;filename&gt;
+  quit
+Your choice? <strong>list</strong>
+                     file0.txt (   27)
+                             . ( dir )
+                     file3.txt (   27)
+                     file1.txt (   27)
+                     file2.txt (   27)
+                            .. ( dir )
+
+What would you like to do?
+  list
+  get &lt;filename&gt;
+  put &lt;filename&gt;
+  quit
+Your choice? <strong>get file99.txt</strong>
+&lt;no file&gt;
+
+What would you like to do?
+  list
+  get &lt;filename&gt;
+  put &lt;filename&gt;
+  quit
+Your choice? <strong>get file0.txt</strong>
+Received file0.txt
+
+What would you like to do?
+  list
+  get &lt;filename&gt;
+  put &lt;filename&gt;
+  quit
+Your choice? <strong>quit</strong>
+Press enter
+(<em>I press <code>enter</code>,
+ the client ends but the server is still running</em>)
+</pre>
+	</td>
+      </tr>
+    </table>
+  </p>
+
+  <p>
+    <h3>Sample protocol:</h3>
+<pre>
+<strong>NOTE:</strong>  All strings are of length <code>MAX_LINE</code>
+
+babyFTPClient				babyFTPServer
+    |					    |
+    | connect()				    |
+    +--------------------------------------&gt;+
+    |					    |
+    |				   accept() |
+    +&lt;--------------------------------------+
+    |					    |
+    | &quot;BAD PASSWORD        &quot;		    |
+    +--------------------------------------&gt;+
+    |					    |
+    |		      BAD_PASSWORD_RESPONSE |
+    +&lt;--------------------------------------+
+    |					    |
+    |				    close() |
+    |			X &lt;-----------------+
+    |					    |
+    X					    X
+   end					   end
+
+
+babyFTPClient				babyFTPServer
+    |					    |
+    | connect()				    |
+    +--------------------------------------&gt;+
+    |					    |
+    |				   accept() |
+    +&lt;--------------------------------------+
+    |					    |
+    | &quot;CORRECT PASSWORD    &quot;		    |
+    +--------------------------------------&gt;+
+    |					    |
+    |		     GOOD_PASSWORD_RESPONSE |
+    +&lt;--------------------------------------+
+    |					    |
+    | LIST_CMD				    |
+    +--------------------------------------&gt;+
+    |					    |
+    |			&quot;file0.txt (   27)&quot; |
+    +&lt;--------------------------------------+
+    |					    |
+    |			&quot;.         ( dir )&quot; |
+    +&lt;--------------------------------------+
+    |					    |
+    |			&quot;file3.txt (   27)&quot; |
+    +&lt;--------------------------------------+
+    |					    |
+    |			&quot;file1.txt (   27)&quot; |
+    +&lt;--------------------------------------+
+    |					    |
+    |			&quot;file2.txt (   27)&quot; |
+    +&lt;--------------------------------------+
+    |					    |
+    |			&quot;..        ( dir )&quot; |
+    +&lt;--------------------------------------+
+    |					    |
+    |			       END_RESPONSE |
+    +&lt;--------------------------------------+
+    |					    |
+    | GET_CMD				    |
+    +--------------------------------------&gt;+
+    |					    |
+    | &quot;file99.txt        &quot;		    |
+    +--------------------------------------&gt;+
+    |					    |
+    |			   NO_FILE_RESPONSE |  //  This file does not exist
+    +&lt;--------------------------------------+
+    |					    |
+    | GET_CMD				    |
+    +--------------------------------------&gt;+
+    |					    |
+    | &quot;file0.txt        &quot;		    |
+    +--------------------------------------&gt;+
+    |					    |
+    |			&quot;27               &quot; |  // Assume file0.txt is 27 chars
+    +&lt;--------------------------------------+
+    |					    |
+    |	     &quot;abcdefghijklmnopqrstuvwxyz\n&quot; |  // Send EXACTLY 27 chars
+    +&lt;--------------------------------------+
+    |					    |
+    | QUIT_CMD				    |
+    +--------------------------------------&gt;+
+    |					    |
+    X					    X
+   end					   end
+</pre>
+  </p>
+    
+     <b>5 Points Extra credit!</b>  (Lots of work, little glory)
+       Instead of using <code>fgets()</code> when having the user enter passwords use the <code>ncurses</code> package to let the user type in the name with privacy.
+       When a letter is between ASCII 32 to ASCII 126 is typed, no matter the letter, the character <code>DUMMY_PASSWORD_VISIBLE_CHAR</code> appears on the screen.
+       Have the user type in the password twice to verify that they typed it correctly.
+       If they haven&#39;t, make them re-enter twice until they do.
+
+       <p>
+	 <b>Sample output (server, extra-credit):</b>
+<pre>
+[jphillips@cdmlinux Assign4]$ <strong>./babyFTPServer </strong>
+Desired port number? <strong>20001</strong>
+
+
+<em>(Screen clears)</em>
+
+
+   Please enter password: <strong>.....</strong>         <em>(I typed &quot;hi&quot;.)</em>
+Please re-enter password: <strong>.....</strong>         <em>(I typed &quot;Hi&quot;.)</em>
+
+Passwords don&#39;t match!
+
+   Please enter password: <strong>.....</strong>         <em>(I typed &quot;hi&quot;.)</em>
+Please re-enter password: <strong>.....</strong>         <em>(I typed &quot;hi&quot;.)</em>
+
+
+<em>(Screen clears)</em>
+
+[jphillips@cdmlinux Assign4]$ ./babyFTPServer 
+Desired port number? 20202
+
+<i>(Program waits for client)</i>
+</pre>
+       </p>
+
+    
+
+  <p>
+    <strong>babyFTPHeader.h:</strong>
+<pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		babyFTPHeader.h						---*
+ *---									---*
+ *---	    This file defines common constants for a very simple remote	---*
+ *---	file listing server.						---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1.0		2012 August 9		Joseph Phillips	---*
+ *---									---*
+ *---	Version 1.1		2013 August 15		Joseph Phillips	---*
+ *---									---*
+ *---	    Adapted to do more than just list remote files as the	---*
+ *---	previous remoteFileListingHeader.h.				---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+#include	&lt;cstdlib&gt;
+#include	&lt;cstdio&gt;
+#include	&lt;cstring&gt;
+#include	&lt;unistd.h&gt;	// for close(), read(), write()
+#include	&lt;arpa/inet.h&gt;	// for htons(), bind(), socket()
+#include	&lt;ncurses.h&gt;	// for cursor control
+
+typedef		unsigned int			uint;
+
+const int	MAX_STRING			= 80;
+
+const int	MAX_PASSWORD_LEN		= MAX_STRING;
+
+const int	MAX_LINE			= 256;
+
+const char	DUMMY_PASSWORD_VISIBLE_CHAR	= &#39;.&#39;;
+
+const char	BACKSPACE_CHAR			= 127;
+
+#define		BAD_PASSWORD_RESPONSE		&quot;Bad password!&quot;
+
+#define		GOOD_PASSWORD_RESPONSE		&quot;Login successful.&quot;
+
+#define		END_RESPONSE			&quot;&lt;end&gt;&quot;
+
+#define		NO_FILE_RESPONSE		&quot;&lt;no file&gt;&quot;
+
+typedef		enum
+		{
+		  NULL_FTP_ACTION,
+		  LIST_FTP_ACTION,
+		  GET_FTP_ACTION,
+		  PUT_FTP_ACTION,
+		  QUIT_FTP_ACTION
+		}
+		ftp_action_t;
+
+#define		LIST_CMD			&quot;list&quot;
+
+const int	LIST_CMD_LEN			= sizeof(LIST_CMD) - 1;
+
+#define		GET_CMD				&quot;get &quot;
+
+const int	GET_CMD_LEN			= sizeof(GET_CMD) - 1;
+
+#define		PUT_CMD				&quot;put &quot;
+
+const int	PUT_CMD_LEN			= sizeof(PUT_CMD) - 1;
+
+#define		QUIT_CMD			&quot;quit&quot;
+
+const int	QUIT_CMD_LEN			= sizeof(QUIT_CMD) - 1;</pre>
+  </p>
+
+  <p>
+    <strong>babyFTPServer.cpp:</strong>
+<pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		babyFTPServer.cpp					---*
+ *---									---*
+ *---	    This file defines a very simple file-transfer server	---*
+ *---	program.							---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1.0		2012 August 8		Joseph Phillips	---*
+ *---									---*
+ *---	Version 1.1		2013 August 15		Joseph Phillips	---*
+ *---									---*
+ *---	    Adapted to do more than just list remote files as the	---*
+ *---	previous remoteFileListingServer.cpp.				---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+//  Compile with:
+//    $ g++ babyFTPServer.cpp -o babyFTPServer
+//
+//  For extra credit do:
+//    $ g++ babyFTPServer.cpp -o babyFTPServer -lncurses
+
+#include	&quot;babyFTPHeader.h&quot;
+#include	&lt;sys/types.h&gt;	// for open()
+#include	&lt;sys/stat.h&gt;	// for open(), stat()
+#include	&lt;fcntl.h&gt;	// for open()
+#include	&lt;dirent.h&gt;	// for opendir(), readdir(), closedir()
+#include	&lt;wait.h&gt;	// for wait()
+#include	&lt;signal.h&gt;	// for sigaction()
+
+using namespace std;
+
+enum
+{
+  PORT_NUM_CMDLINE_INDEX			= 1,
+  PASSWD_FILENAME_CMDLINE_INDEX
+};
+
+const int	MAX_NUM_QUEUING_CLIENTS		= 5;
+
+#define		DIR_NAME			&quot;.&quot;
+
+#define		DEFAULT_PASSWORD_FILENAME	&quot;.babyFTPrc&quot;
+
+
+//  PURPOSE:  To serve as the SIGCHLD handler.  Ignores &#39;sig&#39;.  No return
+//	value.
+void	sigchld_handler		(int	sig
+				)
+{
+  int	status;
+  pid_t	pid;
+
+  <strong>//  YOUR CODE</strong>
+
+  fflush(stdout);
+}
+
+
+//  PURPOSE:  To replace the first &#39;\n&#39; char appearing in the first &#39;maxLength&#39;
+//	chars of &#39;cPtr&#39; with a &#39;\0&#39;.  If neither a &#39;\n&#39; nor a &#39;\0&#39; is found
+//	in the first &#39;maxLength&#39; chars then &#39;cPtr[maxLength-1]&#39; is set to &#39;\0&#39;.
+//	Returns &#39;cPtr&#39;, or NULL if &#39;maxLength==0&#39;.
+char*  	removeEndingNewline	(char*	cPtr,
+				 uint	maxLength
+				)
+{
+  //  I.  Applicability validity check:
+  if  ( (cPtr == NULL) || (maxLength == 0) )
+    return(NULL);
+
+  //  II.  Remove ending newline char:
+  for  (uint i = 0;  i &lt; maxLength;  i++)
+  {
+    if  (cPtr[i] == &#39;\0&#39;)
+      return(cPtr);
+
+    if  (cPtr[i] == &#39;\n&#39;)
+    {
+      cPtr[i] = &#39;\0&#39;;
+      return(cPtr);
+    }
+
+  }
+
+  //  III.  &#39;\n&#39; not found, end string and return:
+  cPtr[maxLength-1] = &#39;\0&#39;;
+  return(cPtr);
+}
+
+
+//  PURPOSE:  To get the port number to use either from
+//	&#39;argv[PORT_NUM_CMDLINE_INDEX]&#39; (if there are sufficient arguments
+//	according to &#39;argc&#39;) or by asking the user.  Then to attempt to
+//	open a listening socket on that port.  Returns file descriptor of
+//	listening socket on success or &#39;-1&#39; otherwise.
+int	createListeningSocket	(int		argc,
+				 const char*	argv[]
+				)
+{
+  //  I.  Applicability validity check:
+
+  //  II.  Create listening socket:
+  //  II.A.  Get desired port number:
+  int 	     port;
+
+  if  (argc &gt; PORT_NUM_CMDLINE_INDEX)
+    port = strtol(argv[PORT_NUM_CMDLINE_INDEX],NULL,0);
+  else
+  {
+    char	text[MAX_STRING];
+
+    printf(&quot;Desired port number? &quot;);
+    fgets(text,MAX_STRING,stdin);
+    port = strtol(text,NULL,0);
+  }
+
+  //  II.B.  Create listening socket:
+  int socketDescriptor;
+
+  <strong>//  YOUR CODE HERE</strong>
+
+  //  III.  Finished:
+  return(socketDescriptor);
+}
+
+
+//  PURPOSE:  To get the password, either from the file specified in
+//	&#39;argv[PASSWD_FILENAME_CMDLINE_INDEX]&#39; if there are sufficient
+//	command line arguments according to &#39;argc&#39;, or from file
+//	&#39;DEFAULT_PASSWORD_FILENAME&#39;, or by asking user.  Up to &#39;maxLength-1&#39;
+//	chars of password written to &#39;password&#39;.  Returns &#39;password&#39;.
+char*	obtainPassword	(int		argc,
+			 const char*	argv[],
+			 char* 		password,
+			 uint		maxLength
+			)
+{
+  //  I.  Applicability validity check:
+
+  //  II.  Obtain password:
+  const char*	passwordFilename= (argc &gt; PASSWD_FILENAME_CMDLINE_INDEX)
+  		 		  ? argv[PASSWD_FILENAME_CMDLINE_INDEX]
+				  : DEFAULT_PASSWORD_FILENAME;
+
+  FILE* passwordFilePtr;
+
+<strong>  //  YOUR CODE HERE</strong>
+
+  if  ( true // <strong>CHANGE THIS</strong>
+      )
+  {
+<strong>    //  IF YOU DO THE EXTRA-CREDIT REPLACE THESE 2 LINE BELOW:</strong>
+    printf(&quot;Couldn&#39;t read %s, password for clients? &quot;,passwordFilename);
+    fgets(password,maxLength,stdin);
+  }
+  else
+  {
+<strong>    //  DEPENDING ON HOW YOU OPEN YOUR FILE, MAYBE SOMETHING HERE</strong>
+  }
+
+  removeEndingNewline(password,maxLength);
+
+  //  III.  Finished:
+  return(password);
+}
+
+
+//  PURPOSE:  To send &#39;GOOD_PASSWORD_RESPONSE&#39; to the client over socket file
+//	descriptor &#39;clientFD&#39; and return &#39;true&#39; if the password &#39;read()&#39; from
+//	&#39;clientFD&#39; matches &#39;password&#39;, or to send &#39;BAD_PASSWORD_RESPONSE&#39; to
+//	the client and return &#39;false&#39; otherwise.
+bool	didLogin	(int		clientFD,
+			 const char*	password
+			)
+{
+  //  I.  Application validity check:
+  printf(&quot;Process %d authenticating user . . .\n&quot;,getpid());
+  fflush(stdout);
+
+  //  II.  See if user successfully logged-in:
+  //  II.A.  Obtain user&#39;s password:
+  char	buffer[MAX_LINE];
+
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  II.B.  Handle when user&#39;s password does NOT match:
+  if  ( strncmp(removeEndingNewline(buffer,MAX_LINE),
+		password,
+		MAX_PASSWORD_LEN
+	       )
+	!= 0
+      )
+  {
+<strong>    //  YOUR CODE HERE</strong>
+    printf(&quot;Process %d bad password.\n&quot;,getpid());
+    return(false);
+  }
+
+  //  II.C.  If get here then user&#39;s password does match:
+<strong>  //  YOUR CODE HERE</strong>
+  printf(&quot;Process %d good password.\n&quot;,getpid());
+
+  //  III.  Finished:
+  return(true);
+}
+
+
+//  PURPOSE:  To list the files in the server&#39;s current directory to the client
+//	using file descriptor &#39;clientFD&#39;, followed by &#39;END_RESPONSE,MAX_LINE&#39;.
+//	No return value.
+void	listDir		(int		clientFD
+			)
+{
+  //  I.  Application validity check:
+  printf(&quot;Process %d starting listing current directory.\n&quot;,getpid());
+  fflush(stdout);
+
+  //  II.  List files:
+  //  II.A.  Attempt to open the directory:
+  char	buffer[MAX_LINE];
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  III.  Finished:
+  printf(&quot;Process %d finished listing current directory.\n&quot;,getpid());
+  fflush(stdout);
+}
+
+
+//  PURPOSE:  To send to the client using file descriptor &#39;clientFD&#39; the file
+//	whose name is &#39;read()&#39; from &#39;clientFD&#39;.  No return value.
+void	getFile		(int		clientFD
+			)
+{
+  //  I.  Applicability validity check:
+  printf(&quot;Process %d attempting to read file.\n&quot;,getpid());
+  fflush(stdout);
+
+  //  II.  Attempt to get the file:
+  //  II.A.  Attempt to &#39;read()&#39; the filename from &#39;clientFD&#39;:
+  char	buffer[MAX_LINE];
+  char	filename[MAX_LINE];
+
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  II.B.  Attempt to open file:
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  II.C.  Attempt to get file&#39;s size:
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  II.D.  Tell client about the file:
+  printf(&quot;Process %d getting %s.\n&quot;,getpid(),buffer);
+  fflush(stdout);
+
+  //  II.D.1.  Tell client how many bytes the file has:
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  II.D.2.  Tell client the chars of the file:
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  II.E.  Close file:
+<strong>  //  YOUR CODE HERE</strong>
+
+  //  III.  Finished:
+  printf(&quot;Process %d read file %s.\n&quot;,getpid(),&lt;yourFileNameVar&gt;);
+  fflush(stdout);
+}
+
+
+//  PURPOSE:  To handle the client whom talking to over socket file descriptor
+//	&#39;clientFD&#39; and that should authenticate with password &#39;password&#39;.
+//	Returns &#39;EXIT_SUCCESS&#39; if session went well or &#39;EXIT_FAILURE&#39;
+//	otherwise.
+int	handleClient	(int		clientFD,
+			 const char*	password
+			)
+{
+  //  I.  Application validity check:
+  if  ( !didLogin(clientFD,password) )
+  {
+    close(clientFD);
+    return(EXIT_FAILURE);
+  }
+
+  //  II.  Handle client:
+  int	status	=	EXIT_SUCCESS;
+  char	buffer[MAX_LINE];
+
+  //  II.A.  Each iteration attempts to handle another
+  //  	     command coming from the client:
+  while  (true)
+  {
+    //  II.A.1.  &#39;read()&#39; command from client:
+    int	numChars	= read(clientFD,buffer,MAX_LINE);
+
+    if  (numChars &lt; 0)
+    {
+      status = EXIT_FAILURE;
+      break;
+    }
+
+    //  II.A.2.  Handle various commands:
+    if  (strncmp(buffer,QUIT_CMD,QUIT_CMD_LEN) == 0)
+    {
+      printf(&quot;Process %d quitting.\n&quot;,getpid());
+      fflush(stdout);
+      break;
+    }
+    else
+    if  (strncmp(buffer,LIST_CMD,LIST_CMD_LEN) == 0)
+    {
+      listDir(clientFD);
+    }
+    else
+    if  (strncmp(buffer,GET_CMD,GET_CMD_LEN) == 0)
+    {
+      getFile(clientFD);
+    }
+
+  }
+
+  //  III.  Finished:
+  return(status);
+}
+
+
+//  PURPOSE:  To listen on socket &#39;listeningSocketId&#39; for clients, let them
+//	attempt to authenticate with password &#39;password&#39;, and to send list
+//	of current directory entries to those that are successful.  No return
+//	value.
+void	doServer	(int		listeningSocketId,
+			 const char*	password
+			)
+{
+  //  I.  Applicability validity check:
+
+  //  II.  Serve:
+
+  //  II.A.  Each iteration serves one client
+  bool	shouldServe = true;
+
+  while  (shouldServe)
+  {
+    //  II.A.1.  Open communication with client:
+    int		clientDescriptor	= accept(listeningSocketId,NULL,NULL);
+
+    //  II.A.2.  Handle client:
+    if  (fork() == 0)
+    {
+      exit(handleClient(clientDescriptor,password));
+    }
+
+  }
+
+  //  III.  Finished:
+}
+
+
+//  PURPOSE:  To get a port and function as a server on that port that sends
+//	to clients a listing of the entries in the current directory.
+//	First command line argument (if present) taken as port to use.
+//	Second command line argument (if present) taken as filename containing
+//	password to authenticate users.
+int	main		(int		argc,
+ 			 const char*	argv[]
+			)
+{
+  //  I.  Applicability validity check:
+
+  //  II.  Do server:
+  //  II.A.  Setup for server:
+  char		password[MAX_PASSWORD_LEN];
+  int		listeningSocketId;
+
+  if  ( (listeningSocketId = createListeningSocket(argc,argv)) &lt; 0 )
+    return(EXIT_FAILURE);
+
+  obtainPassword(argc,argv,password,MAX_PASSWORD_LEN);
+  <strong>//  YOUR CODE HERE to make sigchld_handler() the handler for SIGCHLD</strong>
+
+  //  II.B.  Do server:
+  doServer(listeningSocketId,password);
+
+  //  III.  Finished:
+  close(listeningSocketId);
+  return(EXIT_SUCCESS);
+}</pre>
+  </p>
+
+ 
+
+<script type="text/javascript" src="/d2l/common/math/MathML.js?v=10.7.2.7100-324 "></script><script type="text/javascript">document.addEventListener('DOMContentLoaded', function() { D2LMathML.DesktopInit('https://s.brightspace.com/lib/mathjax/2.6.1/MathJax.js?config=MML_HTMLorMML','https://s.brightspace.com/lib/mathjax/2.6.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML'); });</script></body></html>

@@ -1,0 +1,737 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html><head></head><body>
+
+ 
+  
+  
+ 
+
+ 
+  <center>
+  <h2>CSC 374: Computer Systems II: 2014 Summer II, Assignment #3</h2>
+  <p>Last Modified 2014 August 7</p>
+  </center>
+
+  <h4>Purpose:</h4>
+   To practice:
+   <ol type="1">
+     <li>programming with POSIX threads
+     </li><li>good C string techniques
+   </li></ol>
+
+  <h4>Computing</h4>
+  <p>
+  Please <a rel="noopener" href="">ssh</a> into cdmlinux.cstcis.cti.depaul.edu, or use your own Linux machine.
+  </p>
+
+
+  <h4>Assignment:</h4>
+  <ol type="1">
+    <li><h4>dogEatThenDogPoop.cpp (60 Points)</h4>
+      <p>
+	The following program should make a dog, a dog walker, and a thread for both.
+	The thread for the dog wants to <code>eat()</code>.
+	It will continue eating . . . until the dog&#39;s gastrointestinal (GI) tract is <em>stuffed</em>.
+	The thread for the walker wants to <code>walk()</code> the dog (to let the dog &quot;relieve itself of its digested food&quot;)
+	It will continue walking the dog . . . until the dog&#39;s gastrointestinal tract is <em>famished</em>.
+      </p>
+
+      <p>
+	For the sanitation of both the dog and the walker, the dog should not be allowed to eat and poop at the same time.
+	(Thus, you will need some mutex lock the dog&#39;s gastrointestinal tract.)
+	Also, a stuffed dog cannot eat, and a famished dog should not be walked.
+	Check out my useful aptly-named methods, but you may need to add some more variables.
+      </p>
+
+      <p>
+	Finish the program:
+	<ol type="a">
+	  <li><code>class Dog</code> should be given member variables for the mutex and whatever else.
+	    They should be initialized in the constructor, destroyed in the destructor, and they should be given accessors that return pointers to them.
+	  </li><li>Class Dog&#39;s <code>eat()</code> method should:
+	    <ul>
+	      <li>get the lock on the GI-tract,
+	      </li><li>wait <code>while</code> the dog is stuffed,
+	      </li><li>do the eating (already done),
+	      </li><li>signal the walking thread that the dog is no longer famished, and
+	      </li><li>release the lock.
+	    </li></ul>
+	      While it is waiting to no longer be stuffed it should say:
+<pre>
+(dog&#39;s name): &quot;I&#39;m stuffed, no need to eat!&quot;
+</pre>
+	  </li><li>Class Dog&#39;s <code>walk()</code> method should:
+	    <ul>
+	      <li>get the lock on the dog&#39;s GI-tract,
+	      </li><li>wait <code>while</code> the dog is famished,
+	      </li><li>do the walking (already done),
+	      </li><li>signal the eating thread that the dog is no longer stuffed , and
+	      </li><li>release the lock.
+	    </li></ul>
+	      While it is waiting to no longer be famished it should say:
+<pre>
+Walker: &quot;(dog&#39;s name) is famished, no need to walk him!&quot;
+</pre>
+	  </li><li><code>main()</code> should according to a random number either create the dog thread (to run <code>doDog()</code>) and then walker thread (to run <code>doWalker()</code>), or the walker thread and then dog thread.
+	    It should then wait for both threads to end.
+	</li></ol>
+      </p>
+
+      <p>
+<pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		dogEatThenDogPoop.cpp					---*
+ *---									---*
+ *---	    This file implements a multi-threaded application where	---*
+ *---	there is a mutex lock on the gastro-intestinal tract of an	---*
+ *---	instance of Canis lupus familiaris preventing it from eating	---*
+ *---	pooping at the same time.					---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1.0		2012 August 2		Joseph Phillips	---*
+ *---									---*
+ *---	Version 1.1		2014 August 5		Joseph Phillips	---*
+ *---									---*
+ *---	    Improved object-oriented design.				---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+//  Compile with:
+//  $ g++ dogEatThenDogPoop.cpp -o dogEatThenDogPoop -lpthread
+
+//---			Inclusion of headers				---//
+
+#include &lt;cstdlib&gt;
+#include &lt;cstdio&gt;
+#include &lt;pthread.h&gt;
+
+using namespace std;
+
+
+
+//---				Constants:				---//
+
+const int	FULL_INTESTINE	= 4;
+
+const int	NUM_DOG_CYCLES	= 32;
+
+const int	MAX_LINE	= 256;
+
+
+
+//---				Classes:				---//
+
+
+//  PURPOSE:  To represent a Dog.
+class	Dog
+{
+  //  V.  Member vars:
+  //  PURPOSE:  To hold the Dog&#39;s name.
+  const char*		namePtr_;
+
+  //  PURPOSE:  To hold the fullness level of the Dog&#39;s gastro-intestinal tract.
+  int 		   	gastroIntestinalFullness_;
+
+  <strong>//  Perhaps member vars here:</strong>
+
+  //  II.  Disallowed auto-created methods:
+  //  No default constructor:
+  Dog 	 ();
+
+  //  No copy constructor:
+  Dog	(const Dog&amp;);
+
+  //  No copy assignment op:
+  Dog&amp;	operator=	(const Dog&amp;);
+
+protected :
+  //  III.  Protected methods:
+
+public : 
+  //  IV. Constructor(s), factory(s), assignment op(s), destructor:
+  //  PURPOSE:  To name &#39;*this&#39; Dog &#39;namePtr&#39;.  No return value.
+  Dog	(const char* newNamePtr) throw(const char*) :
+	namePtr_(newNamePtr),
+	gastroIntestinalFullness_(FULL_INTESTINE / 2)
+  {
+    //  I.  Applicability validity check:
+    if  (newNamePtr == NULL)
+      throw &quot;NULL given to Dog constructor&quot;;
+
+    //  II.  Initialize member vars:
+    <strong>//  Do something here</strong>
+
+    //  III.  Finished:
+  }
+
+
+  //  PURPOSE:  To release resources.  No parameters.  No return value.
+  ~Dog	() throw()
+  {
+    //  I.  Applicability validity check:
+
+    //  II.  Release resources:
+    <strong>//  And here</strong>
+
+    //  III.  Finished:
+  }
+
+
+  //  V.  Accessors:
+  //  PURPOSE:  To return &#39;*this&#39; Dog&#39;s name.  No parameters.
+  const char*	getNamePtr	() const throw()	{ return(namePtr_); }
+
+  <strong>//  You may want to add some accessors:</strong>
+
+  //  PURPOSE:  To return &#39;true&#39; if the gastrointestinal tract of &#39;*this&#39; Dog
+  //  	is full or &#39;false&#39; otherwise.  No parameters.
+  bool		isStuffed () const throw()
+	{ return(gastroIntestinalFullness_ == FULL_INTESTINE); }
+
+  //  PURPOSE:  To return &#39;true&#39; if the gastrointestinal tract of &#39;*this&#39; Dog
+  //  	is empty or &#39;false&#39; otherwise.  No parameters.
+  bool		isFamished () const throw()
+	{ return(gastroIntestinalFullness_ == 0); }
+
+  //  VI.  Mutators:
+
+
+  //  VII.  Methods that do main work of class:
+  //  PURPOSE:  To walk &#39;*this&#39; Dog and partially empty out its G-I tract.
+  //  	No parameters.  No return value.
+  void		walk	() throw()
+  {
+    const char*	poopArray[]	= {&quot;Nature calls&quot;,
+    	  			   &quot;Don&#39;t step in that!&quot;,
+				   &quot;Eeww!&quot;,
+				   &quot;All things must pass.&quot;,
+				   &quot;What goes in must come out.&quot;
+				  };
+
+    <strong>// Pre-critical section code here</strong>
+
+    //  Critical section (leave this alone):
+    gastroIntestinalFullness_--;
+    printf(&quot;Walker: \&quot;%s\&quot; (%d)\n&quot;,
+    	   poopArray[rand() % (sizeof(poopArray)/sizeof(const char*))],
+	   gastroIntestinalFullness_
+	  );
+
+    <strong>// Post-critical section code here</strong>
+  }
+
+
+  //  PURPOSE:  To let the Dog eat and partially fill up its G-I tract.
+  //  	No parameters.  No return value.
+  void		eat	() throw()
+  {
+    const char*	eatArray[]	= {&quot;Munch munch&quot;,
+    	  			   &quot;Crunch crunch&quot;,
+				   &quot;Chew chew chew&quot;,
+				   &quot;(Slobber)&quot;
+				  };
+
+    <strong>// Pre-critical section code here</strong>
+
+    //  Critical section (leave this alone):
+    gastroIntestinalFullness_++;
+    printf(&quot;%s: \&quot;%s\&quot; (%d)\n&quot;,
+	   getNamePtr(),
+	   eatArray[rand() % (sizeof(eatArray) / sizeof(const char*))],
+	   gastroIntestinalFullness_
+	  );
+
+    <strong>// Post-critical section code here</strong>
+  }
+
+};
+
+
+//  PURPOSE:  To represent a DogWalker.
+class	DogWalker
+{
+  //  I.  Member vars:
+  //  PURPOSE:  To refer to the Dog being walked:
+  Dog&amp;		dog_;
+
+  //  II.  Disallowed auto-created methods:
+  //  No default constructor:
+  DogWalker 	 ();
+
+  //  No copy constructor:
+  DogWalker	(const DogWalker&amp;);
+
+  //  No copy assignment op:
+  DogWalker&amp;	operator=	(const DogWalker&amp;);
+
+protected :
+  //  III.  Protected methods:
+
+public :
+  //  IV. Constructor(s), factory(s), assignment op(s), destructor:
+  //  PURPOSE:  To name &#39;*this&#39; DogWalker &#39;namePtr&#39;.  No return value.
+  DogWalker	(Dog&amp;  		newDog
+		)
+		throw(const char*) :
+	dog_(newDog)
+  {
+    //  I.  Applicability validity check:
+
+    //  II.  Initialize member vars:
+
+    //  III.  Finished:
+  }
+
+  //  PURPOSE:  To release resources.  No parameters.  No return value.
+  ~DogWalker	()	{ }
+
+  //  V.  Accessors:
+  //  PURPOSE:  To return a reference to the Dog walked by &#39;*this&#39;.  No
+  //    parameters.
+  Dog&amp;	getDog () const throw()	{ return(dog_); }
+
+  //  VI.  Mutators:
+
+  //  VII.  Methods that do main work of class:
+
+};
+
+
+
+//---				Functions:				---//
+
+//  PURPOSE:  To return a random dog name.  No parameters.
+const char*	getRandomDogName	()
+{
+  const char*	dogNameArray[]		= {&quot;Astro&quot;,
+      					   &quot;Clifford&quot;,
+					   &quot;Dino&quot;,
+					   &quot;Muttley&quot;,
+					   &quot;Gromit&quot;,
+					   &quot;Mr. Peabody&quot;,
+					   &quot;Odie&quot;,
+					   &quot;Pluto&quot;,
+					   &quot;Santa&#39;s Little Helper&quot;,
+					   &quot;Scooby Doo&quot;,
+					   &quot;Snoopy&quot;,
+					   &quot;Fido&quot;
+					  };
+
+  const int	NUM_DOG_NAMES		= sizeof(dogNameArray) /
+      					  sizeof(const char*);
+
+  return(dogNameArray[rand() % NUM_DOG_NAMES]);
+}
+
+
+//  PURPOSE:  To let the DogWalker pointed to by &#39;(DogWalker*)ptr&#39; walk its
+//	dog.  Returns &#39;NULL&#39; which should be ignored.
+void*	doWalker	(void*	ptr)
+{
+  DogWalker*	walkerPtr	= (DogWalker*)ptr;
+
+  for  (int i = 0;  i &lt; NUM_DOG_CYCLES;  i++)
+    walkerPtr-&gt;getDog().walk();
+
+  return(NULL);
+}
+
+
+
+//  PURPOSE:  To let the Dog pointed to by &#39;(Dog*)ptr&#39; walk its dog.
+//	Returns &#39;NULL&#39; which should be ignored.
+void*	doDog	(void*	ptr)
+{
+  Dog*	dogPtr	= (Dog*)ptr;
+
+  for  (int i = 0;  i &lt; NUM_DOG_CYCLES;  i++)
+    dogPtr-&gt;eat();
+
+  return(NULL);
+}
+
+
+
+//  PURPOSE:  To let the dog eat and let the dog walker walk the dog.
+//	&#39;argc&#39; tells the number of arguments.  &#39;argv[1]&#39;, if present, will be
+//	used to as the random number seed.  Returns &#39;EXIT_SUCCESS&#39; to OS.
+int	main	(int argc, const char* argv[])
+{
+
+  //  I.  Applicability validity check:
+
+  //  II.  Let the dog eat and let the dog walker walk the dog:
+  //  II.A.  Set the random number seed:
+  int		seed;
+  const	char*	cPtr;
+  char		text[MAX_LINE];
+
+  if  (argc &gt; 1)
+    cPtr = argv[1];
+  else
+  {
+    printf(&quot;Random number seed? &quot;);
+    fgets(text,MAX_LINE,stdin);
+    cPtr = text;
+  }
+
+  srand(strtol(cPtr,NULL,10));
+
+  //  II.B.  Make Dog and DogWalker:
+  Dog		dog(getRandomDogName());
+  DogWalker	walker(dog);
+
+  //  II.C.  Do threads for Dog to eat and DogWalker to walk the Dog:
+  <strong>//  Maybe some variables here:</strong>
+
+  if  (rand() % 2)
+  {
+    <strong>//  Thread for doDog() given the address of dog.</strong>
+    <strong>//  then thread for doWalker() given the address of walker.</strong>
+  }
+  else
+  {
+    <strong>//  Thread for doWalker() given the address of walker.</strong>
+    <strong>//  then thread for doDog() given the address of dog.</strong>
+  }
+
+  <strong>//  Wait for both threads</strong>
+
+  //  III.  Finished:
+  return(EXIT_SUCCESS);
+}
+</pre>
+      </p>
+
+      <p>
+	<strong>Sample output:</strong>
+<pre>
+[instructor@JoesLaptopFedora16 Assign3]$ <strong>./dogEatThenDogPoop 6</strong>
+Scooby Doo: &quot;Munch munch&quot; (3)
+Scooby Doo: &quot;Crunch crunch&quot; (4)
+Scooby Doo: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;All things must pass.&quot; (3)
+Walker: &quot;Nature calls&quot; (2)
+Walker: &quot;Don&#39;t step in that!&quot; (1)
+Walker: &quot;All things must pass.&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Chew chew chew&quot; (1)
+Scooby Doo: &quot;Chew chew chew&quot; (2)
+Scooby Doo: &quot;(Slobber)&quot; (3)
+Scooby Doo: &quot;(Slobber)&quot; (4)
+Scooby Doo: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Nature calls&quot; (3)
+Walker: &quot;All things must pass.&quot; (2)
+Walker: &quot;Eeww!&quot; (1)
+Walker: &quot;Don&#39;t step in that!&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Munch munch&quot; (1)
+Scooby Doo: &quot;Munch munch&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;(Slobber)&quot; (1)
+Scooby Doo: &quot;Chew chew chew&quot; (2)
+Walker: &quot;Nature calls&quot; (1)
+Walker: &quot;Eeww!&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Crunch crunch&quot; (1)
+Scooby Doo: &quot;(Slobber)&quot; (2)
+Walker: &quot;Nature calls&quot; (1)
+Walker: &quot;All things must pass.&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Crunch crunch&quot; (1)
+Scooby Doo: &quot;(Slobber)&quot; (2)
+Walker: &quot;Nature calls&quot; (1)
+Walker: &quot;Nature calls&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Munch munch&quot; (1)
+Scooby Doo: &quot;(Slobber)&quot; (2)
+Scooby Doo: &quot;Munch munch&quot; (3)
+Scooby Doo: &quot;Crunch crunch&quot; (4)
+Scooby Doo: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Don&#39;t step in that!&quot; (3)
+Walker: &quot;What goes in must come out.&quot; (2)
+Walker: &quot;Don&#39;t step in that!&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Crunch crunch&quot; (1)
+Scooby Doo: &quot;Munch munch&quot; (2)
+Scooby Doo: &quot;Chew chew chew&quot; (3)
+Scooby Doo: &quot;Chew chew chew&quot; (4)
+Scooby Doo: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Eeww!&quot; (3)
+Walker: &quot;Don&#39;t step in that!&quot; (2)
+Walker: &quot;What goes in must come out.&quot; (1)
+Walker: &quot;All things must pass.&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Crunch crunch&quot; (1)
+Scooby Doo: &quot;Chew chew chew&quot; (2)
+Scooby Doo: &quot;Chew chew chew&quot; (3)
+Scooby Doo: &quot;Munch munch&quot; (4)
+Scooby Doo: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;What goes in must come out.&quot; (3)
+Walker: &quot;Eeww!&quot; (2)
+Walker: &quot;What goes in must come out.&quot; (1)
+Walker: &quot;All things must pass.&quot; (0)
+Walker: &quot;Scooby Doo is famished, no need to walk him!&quot;
+Scooby Doo: &quot;Chew chew chew&quot; (1)
+Scooby Doo: &quot;Chew chew chew&quot; (2)
+Scooby Doo: &quot;Crunch crunch&quot; (3)
+Scooby Doo: &quot;Munch munch&quot; (4)
+Scooby Doo: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Don&#39;t step in that!&quot; (3)
+Walker: &quot;All things must pass.&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;Don&#39;t step in that!&quot; (0)
+Scooby Doo: &quot;(Slobber)&quot; (1)
+Scooby Doo: &quot;Chew chew chew&quot; (2)
+[instructor@JoesLaptopFedora16 Assign3]$ <strong>./dogEatThenDogPoop 66</strong>
+Fido: &quot;Munch munch&quot; (3)
+Fido: &quot;Chew chew chew&quot; (4)
+Fido: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;All things must pass.&quot; (3)
+Walker: &quot;Don&#39;t step in that!&quot; (2)
+Walker: &quot;Nature calls&quot; (1)
+Walker: &quot;Eeww!&quot; (0)
+Walker: &quot;Fido is famished, no need to walk him!&quot;
+Fido: &quot;(Slobber)&quot; (1)
+Fido: &quot;Chew chew chew&quot; (2)
+Fido: &quot;(Slobber)&quot; (3)
+Fido: &quot;Munch munch&quot; (4)
+Fido: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Don&#39;t step in that!&quot; (3)
+Walker: &quot;What goes in must come out.&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;Eeww!&quot; (0)
+Walker: &quot;Fido is famished, no need to walk him!&quot;
+Fido: &quot;Munch munch&quot; (1)
+Fido: &quot;(Slobber)&quot; (2)
+Fido: &quot;Chew chew chew&quot; (3)
+Fido: &quot;Crunch crunch&quot; (4)
+Fido: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;All things must pass.&quot; (3)
+Walker: &quot;Nature calls&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Fido is famished, no need to walk him!&quot;
+Fido: &quot;Chew chew chew&quot; (1)
+Fido: &quot;Chew chew chew&quot; (2)
+Fido: &quot;Crunch crunch&quot; (3)
+Fido: &quot;Crunch crunch&quot; (4)
+Fido: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Don&#39;t step in that!&quot; (3)
+Walker: &quot;Nature calls&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;Eeww!&quot; (0)
+Fido: &quot;Chew chew chew&quot; (1)
+Fido: &quot;Munch munch&quot; (2)
+Fido: &quot;Crunch crunch&quot; (3)
+Fido: &quot;(Slobber)&quot; (4)
+Fido: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Nature calls&quot; (3)
+Walker: &quot;Don&#39;t step in that!&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Fido is famished, no need to walk him!&quot;
+Fido: &quot;(Slobber)&quot; (1)
+Fido: &quot;Crunch crunch&quot; (2)
+Walker: &quot;Eeww!&quot; (1)
+Walker: &quot;All things must pass.&quot; (0)
+Walker: &quot;Fido is famished, no need to walk him!&quot;
+Fido: &quot;Crunch crunch&quot; (1)
+Fido: &quot;Crunch crunch&quot; (2)
+Fido: &quot;(Slobber)&quot; (3)
+Fido: &quot;Crunch crunch&quot; (4)
+Fido: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;What goes in must come out.&quot; (3)
+Walker: &quot;All things must pass.&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;Eeww!&quot; (0)
+Fido: &quot;(Slobber)&quot; (1)
+Fido: &quot;Munch munch&quot; (2)
+Fido: &quot;Chew chew chew&quot; (3)
+Fido: &quot;Crunch crunch&quot; (4)
+Fido: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Nature calls&quot; (3)
+Walker: &quot;What goes in must come out.&quot; (2)
+Walker: &quot;Eeww!&quot; (1)
+Walker: &quot;Don&#39;t step in that!&quot; (0)
+Walker: &quot;Fido is famished, no need to walk him!&quot;
+Fido: &quot;Munch munch&quot; (1)
+Fido: &quot;Chew chew chew&quot; (2)
+Fido: &quot;Munch munch&quot; (3)
+Fido: &quot;(Slobber)&quot; (4)
+Walker: &quot;Don&#39;t step in that!&quot; (3)
+Walker: &quot;Don&#39;t step in that!&quot; (2)
+[instructor@JoesLaptopFedora16 Assign3]$ <strong>./dogEatThenDogPoop 666</strong>
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;Don&#39;t step in that!&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;(Slobber)&quot; (1)
+Mr. Peabody: &quot;(Slobber)&quot; (2)
+Mr. Peabody: &quot;Crunch crunch&quot; (3)
+Mr. Peabody: &quot;Chew chew chew&quot; (4)
+Mr. Peabody: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Don&#39;t step in that!&quot; (3)
+Walker: &quot;Don&#39;t step in that!&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;(Slobber)&quot; (1)
+Mr. Peabody: &quot;(Slobber)&quot; (2)
+Mr. Peabody: &quot;Munch munch&quot; (3)
+Mr. Peabody: &quot;Crunch crunch&quot; (4)
+Mr. Peabody: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;What goes in must come out.&quot; (3)
+Walker: &quot;Eeww!&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;All things must pass.&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;Chew chew chew&quot; (1)
+Mr. Peabody: &quot;Chew chew chew&quot; (2)
+Mr. Peabody: &quot;(Slobber)&quot; (3)
+Walker: &quot;What goes in must come out.&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;(Slobber)&quot; (1)
+Mr. Peabody: &quot;Crunch crunch&quot; (2)
+Mr. Peabody: &quot;Crunch crunch&quot; (3)
+Mr. Peabody: &quot;Munch munch&quot; (4)
+Mr. Peabody: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Nature calls&quot; (3)
+Walker: &quot;Don&#39;t step in that!&quot; (2)
+Walker: &quot;Don&#39;t step in that!&quot; (1)
+Walker: &quot;All things must pass.&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;Munch munch&quot; (1)
+Mr. Peabody: &quot;Chew chew chew&quot; (2)
+Walker: &quot;What goes in must come out.&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;Munch munch&quot; (1)
+Mr. Peabody: &quot;Crunch crunch&quot; (2)
+Mr. Peabody: &quot;Chew chew chew&quot; (3)
+Mr. Peabody: &quot;Crunch crunch&quot; (4)
+Mr. Peabody: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;All things must pass.&quot; (3)
+Walker: &quot;What goes in must come out.&quot; (2)
+Walker: &quot;Nature calls&quot; (1)
+Walker: &quot;What goes in must come out.&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;Chew chew chew&quot; (1)
+Mr. Peabody: &quot;Crunch crunch&quot; (2)
+Mr. Peabody: &quot;Munch munch&quot; (3)
+Mr. Peabody: &quot;(Slobber)&quot; (4)
+Mr. Peabody: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Nature calls&quot; (3)
+Walker: &quot;Don&#39;t step in that!&quot; (2)
+Walker: &quot;Don&#39;t step in that!&quot; (1)
+Walker: &quot;Don&#39;t step in that!&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;Munch munch&quot; (1)
+Mr. Peabody: &quot;(Slobber)&quot; (2)
+Mr. Peabody: &quot;Crunch crunch&quot; (3)
+Mr. Peabody: &quot;(Slobber)&quot; (4)
+Mr. Peabody: &quot;I&#39;m stuffed, no need to eat!&quot;
+Walker: &quot;Don&#39;t step in that!&quot; (3)
+Walker: &quot;Eeww!&quot; (2)
+Walker: &quot;All things must pass.&quot; (1)
+Walker: &quot;Don&#39;t step in that!&quot; (0)
+Walker: &quot;Mr. Peabody is famished, no need to walk him!&quot;
+Mr. Peabody: &quot;Munch munch&quot; (1)
+Mr. Peabody: &quot;Chew chew chew&quot; (2)
+Mr. Peabody: &quot;Munch munch&quot; (3)
+Walker: &quot;All things must pass.&quot; (2)
+</pre>
+      </p>
+
+
+    </li><li><h4>badMemory.c (40 Points)</h4>
+      <p>
+<pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		memoryNoNos.c						---*
+ *---									---*
+ *---	    This program makes all kinds of mistakes with C strings.	---*
+ *---	Fix them!  If you choose to make fixed-length arrays make them	---*
+ *---	no bigger than &#39;MAX_STRING&#39;.  &#39;MAX_STRING&#39; is too small for	---*
+ *---	most applications, and that is the point.  We want to prove	---*
+ *---	that even if the strings are too small we are not subject to	---*
+ *---	buffer overflow attacks.					---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1.0		Joseph Phillips		2013 October 22	---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+#include	&lt;stdlib.h&gt;
+#include	&lt;stdio.h&gt;
+#include	&lt;string.h&gt;
+
+#define		MAX_STRING	20
+
+char*	getFirstName	(char*	firstName
+			)
+{
+  printf(&quot;Please enter your first name: &quot;);
+  gets(firstName);
+  return(firstName);
+}
+
+
+char*	getLastName	(
+			)
+{
+  char	lastName[MAX_STRING];
+
+  printf(&quot;Please enter your last name: &quot;);
+  gets(lastName);
+  return(lastName);
+}
+
+
+char*	getNickName	(char*	nickName
+			)
+{
+  printf(&quot;Please enter your nick name: &quot;);
+  gets(nickName);
+  return(nickName);
+}
+
+
+char*	getCompleteName	(const char*	firstName,
+			 const char*	lastName,
+			 const char*	nickName,
+			 char* 		completeName
+			)
+{
+  sprintf(completeName,&quot;%s \&quot;%s\&quot; %s&quot;,firstName,nickName,lastName);
+  return(completeName);
+}
+
+
+int	main	()
+{
+  char*		firstName;
+  char*		lastName;
+  char*		nickName;
+  char*		completeName;
+
+  firstName	= getFirstName(firstName);
+  lastName	= getLastName();
+  nickName	= getFirstName(nickName);
+
+  completeName	= getCompleteName(firstName,lastName,nickName,completeName);
+  printf(&quot;Hello %s.\n&quot;,completeName);
+  return(EXIT_SUCCESS);
+}</pre>
+      </p>
+  </li></ol>
+ 
+
+<script type="text/javascript" src="/d2l/common/math/MathML.js?v=10.7.2.7100-324 "></script><script type="text/javascript">document.addEventListener('DOMContentLoaded', function() { D2LMathML.DesktopInit('https://s.brightspace.com/lib/mathjax/2.6.1/MathJax.js?config=MML_HTMLorMML','https://s.brightspace.com/lib/mathjax/2.6.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML'); });</script></body></html>

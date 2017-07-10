@@ -1,0 +1,638 @@
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-16">
+
+ 
+  <title>CSC 374: Computer Systems II: 2013 Fall, Assignment #1</title>
+ </head><body>
+  <center>
+  <h2>CSC 374: Computer Systems II: 2014 Summer II<br>Assignment #1</h2>
+  <p>Last Modified 2014 August 1</p>
+  </center>
+
+  <h4>Purpose:</h4>
+  To go over issues related to how the <em>compiler</em> and the <em>linker</em>
+  serve <strong>you,</strong> the programmer.
+
+  <h3>Computing</h3>
+  <p>
+  Please <a href="">ssh</a> into ctilinux1.cstcis.cti.depaul.edu, or use your own Linux machine.
+  </p>
+
+  <ol type="1">
+  <li><h4>Compiler optimization (45 Points)</h4>
+    Consider the following program.
+<pre>/* <strong>q1.c</strong>
+ */
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+
+#define	MIN_VAL			'A'
+#define	MAX_VAL			'Z'
+#define MAX_NUM_CHARS		30000
+#define	MAX_STRING_MEMLEN	10
+typedef	unsigned int		uint;
+typedef	unsigned char		uchar;
+
+const char*	 LOOK_FOR[4]	= {"  UNO","  DOS","  TRES","  CUATRO"};
+
+
+//  PURPOSE:  To create from the heap and return an array of 'n' unsigned
+//	chars initialized to random values between 0 to
+//	'NUM_UNIQUE_VALUES-1'.
+char*	initializeBigArray	(uint	n
+				)
+{
+  uint	i;
+  char*	dataPtr	= (char*)calloc(n,sizeof(char));
+
+  for  (i = 0;  i &lt; n;  i++)
+    dataPtr[i] = (rand() % (MAX_VAL-MIN_VAL+1) ) + MIN_VAL;
+
+  return(dataPtr);
+}
+
+
+//  PURPOSE:  To return the length of string pointed to by 'cPtr'.
+int	length	(const char* cPtr
+		)
+{
+  const char*	run;
+
+  for  (run = cPtr;  *run != '\0';  run++)
+  {
+  }
+
+  return(run - cPtr);
+}
+
+
+//  PURPOSE:  To count and return the number of times that 'substring'
+//	appears in array 'array' of length 'arrayLen'.
+uint	countOccurrences	(uint		arrayLen,
+				 const char*	array,
+				 const char*	substring
+				)
+{
+  uint	i;
+  uint	count	= 0;
+
+  for  (i = 0;  i &lt; arrayLen-length(substring)+1;  i++)
+    if  ( strncmp(array+i,substring,length(substring)) == 0)
+      count++;
+
+  return(count);
+}
+
+
+
+//  PURPOSE:  To count and return the number of times that 'substring'
+//	appears in array 'array' of length 'arrayLen'.
+uint	fastCountOccurrences	(uint		arrayLen,
+				 const char*	array,
+				 const char*	substring
+				)
+{
+  uint	i;
+  uint	count	= 0;
+  uint	sublen	= length(substring);
+  uint	limit	= arrayLen - sublen + 1;
+
+  for  (i = 0;  i &lt; limit;  i++)
+    if  ( strncmp(array+i,substring,sublen) == 0)
+      count++;
+
+  return(count);
+}
+
+
+
+//  PURPOSE: To compute and return some arbitrary function that came out of the
+//	mind of Joe Phillips based upon array of integers 'array' of length
+//	'arrayLen'.
+int	wordCounts	(uint	arrayLen,
+			 char*	array
+			)
+{
+  uint	i;
+  char*	lookFor[4];
+  int	sum		= 0;
+
+  for  (i = 0;  i &lt; 4;  i++)
+//  lookFor[i] = strndup(LOOK_FOR[i],64); Safer, but strndup() may not be defined
+    lookFor[i] = strdup(LOOK_FOR[i]);
+
+  for  (i = 0;  i &lt; arrayLen;  i++)
+  {
+    char*	lookForPtr	= lookFor[i % 4];
+
+    lookForPtr[0]		= (rand() % (MAX_VAL-MIN_VAL+1) ) + MIN_VAL;
+    lookForPtr[1]		= (rand() % (MAX_VAL-MIN_VAL+1) ) + MIN_VAL;
+    sum += countOccurrences(arrayLen,array,lookForPtr);
+  }
+
+  for  (i = 0;  i &lt; 4;  i++)
+    free(lookFor[i]);
+
+  return(sum);
+}
+
+
+
+//  PURPOSE:  To compute and print the value of some arbitrary function
+//	thought of by Joe Phillips.  Ignores parameters.  Returns 'EXIT_SUCCESS'
+//	to OS.
+int	main	(int argc, const char*	argv[])
+{
+  uint	n		= MAX_NUM_CHARS; srand(5);
+  char* charArray	= initializeBigArray(n);
+
+  printf("Useless value == %d\n",wordCounts(n,charArray));
+  free(charArray);
+  return(EXIT_SUCCESS);
+}
+</pre>
+
+    <ol type="A">
+      <li>(8 Points) Compile it for profiling but with <strong>no</strong> extra optimization with:
+<pre>$ <strong>gcc -o q1None -pg q1.c</strong> # Compiles q1.c to write q1None to make profile info
+$ <strong>./q1None</strong>               # Runs q1None
+$ <strong>gprof q1None</strong>           # Gives profile info on q1None
+</pre>
+          <p>
+          What are the number of <em>self seconds</em> taken by:
+	  <table border="1">
+	    <tbody>
+	      <tr><td>Function</td><td>Self seconds</td></tr>
+	      <tr><td>length()</td> <td><strong>71.64</strong></td></tr>
+	      <tr><td>countOccurrences()</td> <td><strong>14.02</strong></td></tr>
+	      <tr><td>initializeBigArray()</td> <td><strong>1.47</strong></td></tr>
+	      <tr><td>wordCounts()</td> <td><strong>0.00</strong></td></tr>
+	    </tbody>
+	  </table>
+	  </p>
+
+      </li>
+
+      <li>(8 Points) Consider the expression <code>lookFor[i % 4]</code> in <code>wordCounts()</code>.
+	The compiler <em>could</em> do an integer-divide to compute the 
+remainder, but division is perhaps the most time-consuming operation 
+that CPUs do on integers.<br>
+	How did it compute <code>i % 4</code>?
+	<strong>Show the assembly language for the modulus-4 implementing operation</strong> using gdb to dissassemble <code>wordCounts()</code> of <code>q1None</code>.
+      </li>
+      <p>
+      <p>
+	<strong>
+<pre>
+(gdb) disass wordCounts 
+Dump of assembler code for function wordCounts:
+   0x0804879b &lt;+0&gt;:	push   %ebp
+   0x0804879c &lt;+1&gt;:	mov    %esp,%ebp
+   0x0804879e &lt;+3&gt;:	push   %esi
+   0x0804879f &lt;+4&gt;:	push   %ebx
+   0x080487a0 &lt;+5&gt;:	sub    $0x30,%esp
+   0x080487a3 &lt;+8&gt;:	call   0x80484c4 &lt;mcount@plt&gt;
+   0x080487a8 &lt;+13&gt;:	movl   $0x0,-0x10(%ebp)
+   0x080487af &lt;+20&gt;:	movl   $0x0,-0x14(%ebp)
+   0x080487b6 &lt;+27&gt;:	jmp    0x80487d5 &lt;wordCounts+58&gt; &lt;&lt; Begin 1st loop
+   0x080487b8 &lt;+29&gt;:	mov    -0x14(%ebp),%ebx
+   0x080487bb &lt;+32&gt;:	mov    -0x14(%ebp),%eax
+   0x080487be &lt;+35&gt;:	mov    0x8049c78(,%eax,4),%eax
+   0x080487c5 &lt;+42&gt;:	mov    %eax,(%esp)
+   0x080487c8 &lt;+45&gt;:	call   0x80484f4 &lt;strdup@plt&gt;
+   0x080487cd &lt;+50&gt;:	mov    %eax,-0x24(%ebp,%ebx,4)
+   0x080487d1 &lt;+54&gt;:	addl   $0x1,-0x14(%ebp)
+   0x080487d5 &lt;+58&gt;:	cmpl   $0x3,-0x14(%ebp)
+   0x080487d9 &lt;+62&gt;:	jbe    0x80487b8 &lt;wordCounts+29&gt;
+   0x080487db &lt;+64&gt;:	movl   $0x0,-0x14(%ebp)
+   0x080487e2 &lt;+71&gt;:	jmp    0x804887c &lt;wordCounts+225&gt;  &lt;&lt; Begin 2nd loop
+   0x080487e7 &lt;+76&gt;:	mov    -0x14(%ebp),%eax
+   0x080487ea &lt;+79&gt;:	<strong>and    $0x3,%eax</strong>
+   0x080487ed &lt;+82&gt;:	mov    -0x24(%ebp,%eax,4),%eax
+   0x080487f1 &lt;+86&gt;:	mov    %eax,-0xc(%ebp)
+   0x080487f4 &lt;+89&gt;:	call   0x80484d4 &lt;rand@plt&gt;  &lt;&lt; Begin statement after (i % 4)
+</pre>
+	  It was done with a bitwise and instead of a modulus.
+	</strong>
+      </p>
+
+      </p><li>(8 Points) Compile it for profiling but <strong>with</strong> optimization with:
+<pre>$ <strong>gcc -o q1Compiler -O1 -pg q1.c</strong> # Compiles q1.c to write q1Compiler to make profile info
+$ <strong>./q1Compiler</strong>                   # Runs q1Compiler
+$ <strong>gprof q1Compiler</strong>               # Gives profile info on q1Compiler
+</pre>
+          <p>
+          What are the number of <em>self seconds</em> taken by:
+	  <table border="1">
+	    <tbody>
+	      <tr><td>Function</td><td>Self seconds</td></tr>
+	      <tr><td>length()</td> <td><strong>18.15</strong></td></tr>
+	      <tr><td>countOccurrences()</td> <td><strong>6.92</strong></td></tr>
+	      <tr><td>initializeBigArray()</td> <td><strong>0.00</strong></td></tr>
+	      <tr><td>wordCounts()</td> <td><strong>0.00</strong></td></tr>
+	    </tbody>
+	  </table>
+	  </p>
+
+      </li>
+
+      <li>(8 Points) Use gdb to dissassemble <code>length()</code> of both <code>q1None</code> and <code>q1Compiler</code>.
+	  <p>
+	  <em>Don't try to understand all the code but in general</em> how did the optimizer make <code>q1Compiler</code>'s <code>length()</code> faster than <code>q1None</code>'s?
+	    Give a specific example by comparing both assembly codes.
+	  </p>
+
+	  <p>
+	    <strong>
+	      The optimized function kept values in registers while the non-optimized version did not.
+	      For example, in the non-optimized version it kept loading and saving the value of <code>run</code> from -0x4(%ebp).
+<pre>
+   0x08048696 &lt;+11&gt;:	mov    0x8(%ebp),%eax  // Load from stack
+   0x08048699 &lt;+14&gt;:	mov    %eax,-0x4(%ebp) // Save back to stack
+   0x0804869c &lt;+17&gt;:	jmp    0x80486a2 &lt;length+23&gt;
+   0x0804869e &lt;+19&gt;:	addl   $0x1,-0x4(%ebp) // Increment on stack
+   0x080486a2 &lt;+23&gt;:	mov    -0x4(%ebp),%eax // Get from stack
+   0x080486a5 &lt;+26&gt;:	movzbl (%eax),%eax
+   0x080486a8 &lt;+29&gt;:	test   %al,%al
+   0x080486aa &lt;+31&gt;:	jne    0x804869e &lt;length+19&gt;
+</pre>
+	      While, in the optimized version it loaded once into %eax, and kept it there.
+<pre>
+   0x0804861c &lt;+8&gt;:	mov    0x8(%ebp),%edx    ; From stack into edx
+   0x0804861f &lt;+11&gt;:	mov    %edx,%eax         ; From edx into eax
+   0x08048621 &lt;+13&gt;:	cmpb   $0x0,(%edx)
+   0x08048624 &lt;+16&gt;:	je     0x804862e &lt;length+26&gt;
+   0x08048626 &lt;+18&gt;:	add    $0x1,%eax         ; kept in eax
+   0x08048629 &lt;+21&gt;:	cmpb   $0x0,(%eax)       ; kept in eax
+   0x0804862c &lt;+24&gt;:	jne    0x8048626 &lt;length+18&gt;
+</pre>
+	    </strong>
+	  </p>
+
+      </li>
+
+      <li>(8 Points) One optimization the compiler may not have made 
+would be to use local variables to hold the computed substring length 
+and the end-of-loop limit in <code>countOccurrences</code>.
+	This optimization has already been made in <code>fastCountOccurrences()</code>.
+	Revise <code>wordCounts()</code> to call <code>fastCountOccurrences()</code> instead of <code>countOccurrences()</code>.
+
+          <p>
+	    Compile it for profiling again with optimization with:
+</p><pre>$ <strong>gcc -o q1Programmer -O1 -pg q1.c</strong> # Compiles q1.c to write q1Programmer to make profile info
+$ <strong>./q1Programmer</strong>                   # Runs q1Programmer
+$ <strong>gprof q1Programmer</strong>               # Gives profile info on q1Programmer
+</pre>
+          <p></p>
+
+          <p>
+          What are the number of <em>self seconds</em> taken by:
+	  <table border="1">
+	    <tbody>
+	      <tr><td>Function</td><td>Self seconds</td></tr>
+	      <tr><td>length()</td> <td><strong>0.01</strong></td></tr>
+	      <tr><td>fastCountOccurrences()</td> <td><strong>3.54</strong></td></tr>
+	      <tr><td>initializeBigArray()</td> <td><strong>0.00</strong></td></tr>
+	      <tr><td>wordCounts()</td> <td><strong>0.00</strong></td></tr>
+	    </tbody>
+	  </table>
+	  </p>
+      </li>
+
+      <li>(5 Points) Which optimizations ought to be done by the <em>compiler</em>?<br>
+	  Which optimizations ought to be done by the <em>programmer</em>?
+	<strong>
+	  <p>
+	    The <em>compiler</em> ought to do reduction-in-strength and register usage optimizations.
+	    The <em>programmer</em> ought to do all others, <em>espicially</em> ones that change the algorithm (like which functions are called).
+	  </p>
+      </li>
+    </ol>
+
+   <p>
+
+  </p></li>
+
+  <li><h4>Linker operation (55 Points total)</h4>
+      The program file <code>p1.c</code> below compiles under Linux to create an object file <code>p1.o</code>.
+      It is to be linked with another file <code>p2.o</code> to create a running program, <code>whole</code>.
+
+<pre>/* <strong>p1.c</strong>
+ */
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+//  PURPOSE:  To tell the maximum length of a C-string.
+#define	 MAX_LENGTH	64
+
+
+
+//  PURPOSE:  To hold the number that the user enters.
+int	guessedNumber;
+
+//  PURPOSE:  To hold the true random number.
+extern	int	trueNumber;
+
+
+//  PURPOSE:  To repeated use 'getInteger()' to get a value for 'guessedNumber'
+//	until that value is between 1 and 100.  No return value.
+extern	void	enterGuess			();
+
+
+//  PURPOSE:  To print 'msgCPtr', allow the user to enter an integer, and
+//	return that integer.
+int	getInteger		(const char*	msgCPtr
+				)
+{
+  char	numberText[MAX_LENGTH];
+
+  printf(msgCPtr);
+  fgets(numberText,MAX_LENGTH,stdin);
+  return(atoi(numberText));
+}
+
+
+//  PURPOSE:  To:
+//	* print "Too low!\n" and return 0 if guessedNumber &lt; trueNumber,
+//	* print "Too high!\n" and return 0 if guessedNumber &gt; trueNumber, or
+//	* print "Congratulations!\n" and return 1 if they are equal.
+extern	int	wasGuessCorrect			();
+
+
+//  PURPOSE:  To return a random number between 1 to 100.  No parameters.
+int	chooseRandomNumber		()
+{
+  return( (rand() % 100) + 1 );
+}
+
+
+//  PURPOSE:  To seed the random number generator with the number given in
+//	'argv[1]' (if 'argc' is at least 2) and allow the user to guess a
+//	randomly-chosen number between 1 and 100 inclusive.  Returns
+//	'EXIT_SUCCESS' to the OS after the number is guessed.
+int	main	(int	argc,
+	 	 char*	argv[]
+		)
+{
+  if  (argc &gt; 1)
+    srand(atoi(argv[1]));
+
+  trueNumber	= chooseRandomNumber();
+
+  do
+  {
+    enterGuess();
+  }
+  while  ( wasGuessCorrect() == 0 );
+
+  return(EXIT_SUCCESS);
+}</pre>
+
+    <p>
+    </p><h5>Sample output:</h5>
+<pre>[instructor@JoesLaptopFedora16 Assign1]$ <strong>gcc p1.c -c</strong>
+[instructor@JoesLaptopFedora16 Assign1]$ <strong>gcc p2.c -c</strong>
+[instructor@JoesLaptopFedora16 Assign1]$ <strong>gcc p1.o p2.o -o whole</strong>
+[instructor@JoesLaptopFedora16 Assign1]$ <strong>./whole 1</strong>
+Please enter your guess 1-100: <strong>50</strong>
+Too low!
+Please enter your guess 1-100: <strong>75</strong>
+Too low!
+Please enter your guess 1-100: <strong>87</strong>
+Too high!
+Please enter your guess 1-100: <strong>81</strong>
+Too low!
+Please enter your guess 1-100: <strong>84</strong>
+Congratulations!
+[instructor@JoesLaptopFedora16 Assign1]$ <strong>./whole 2</strong>
+Please enter your guess 1-100: <strong>50</strong>
+Too low!
+Please enter your guess 1-100: <strong>75</strong>
+Too low!
+Please enter your guess 1-100: <strong>87</strong>
+Too low!
+Please enter your guess 1-100: <strong>93</strong>
+Too high!
+Please enter your guess 1-100: <strong>90</strong>
+Too low!
+Please enter your guess 1-100: <strong>91</strong>
+Congratulations!
+[instructor@JoesLaptopFedora16 Assign1]$ <strong>./whole 3</strong>
+Please enter your guess 1-100: <strong>50</strong>
+Too high!
+Please enter your guess 1-100: <strong>25</strong>
+Too low!
+Please enter your guess 1-100: <strong>37</strong>
+Too low!
+Please enter your guess 1-100: <strong>43</strong>
+Too low!
+Please enter your guess 1-100: <strong>47</strong>
+Congratulations!
+[instructor@JoesLaptopFedora16 Assign1]$ 
+</pre>
+    <p>
+
+    </p><ol type="A">
+    <li>(30 Points) Write an <em>elegant</em> program file <code>p2.c</code> that would compile to <code>p2.o</code>, and would link with <code>p1.o</code> to create a legal running program <code>whole</code>.
+
+      <p>
+	<strong>Important:</strong> <em>Include your <code>p2.c</code> with your submission!</em>
+      </p>
+
+      <p>
+	<strong>HINTS</strong>:
+      </p>
+
+      <ul>
+	<li>What does <code>p1.c</code> need that it does not define?</li>
+	<li>Create the individual object files and the complete executable with:
+<pre>linux&gt; <em>gcc -c p1.c</em>             # creates <strong>p1.o</strong>
+linux&gt; <em>gcc -c p2.c</em>             # creates <strong>p2.o</strong>
+linux&gt; <em>gcc p1.o p2.o -o whole</em>  # creates <strong>whole</strong>
+linux&gt; <em>./whole</em>                 # runs <strong>whole</strong>
+</pre>
+        </li>
+      </ul>
+      <p>
+	<pre>
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+#define	MIN_INT_ARRAY_LEN	10
+
+//  PURPOSE:  To point to the beginning of an array of integers.  'intArrayLen'
+//	tells the length of the list.
+extern	int*	intArray;
+
+
+//  PURPOSE:  To tell the length of array 'intArray'.
+extern	int	intArrayLen;
+
+
+//  PURPOSE:  To return a number that the user entered.  The user is forced to
+//	enter a number that is at least 'min'.
+extern	int	enterNum	(int	min
+				);
+
+
+//  PURPOSE:  To (1) get a value for 'intArrayLen', (2) make 'intArray' an
+//	array of 'intArrayLen' integers, and, (3) to fill that array with
+//	integers from 0..255.
+//	To do (1) use my function 'enterNum()'
+//	To do (2) just say: 'intArray = (int*)calloc(intArrayLen,sizeof(int))'
+//	To do (3) use a for-loop with 'intArrayLen' as the limit.  Each
+//	iteration should set an element of 'intArray[]' to '(rand() % 256)'.
+//	No return value.
+void	defineIntArray()
+{
+  intArrayLen	= enterNum(MIN_INT_ARRAY_LEN);
+  intArray	= (int*)calloc(intArrayLen,sizeof(int));
+
+  int i;
+
+  for  (i = 0;  i &lt; intArrayLen;  i++)
+    intArray[i]	= rand() % 256;
+}
+
+
+//  PURPOSE:  To print all 'intArrayLen' integers in 'intArray', followed by
+//	the highest value in that array.  No parameters.  No return value.
+void	printAllThenHighest()
+{
+  int	highest	= intArray[0];
+  int	i;
+
+  for  (i = 1;  i &lt; intArrayLen;  i++)
+    if  (intArray[i] &gt; highest)
+      highest = intArray[i];
+
+  printf(&quot;The highest number of the array:\n&quot;);
+
+  for  (i = 0;  i &lt; intArrayLen;  i++)
+    printf(&quot; %d%c&quot;,intArray[i],(i == (intArrayLen-1) ? '\n' : ',' ) );
+
+  printf(&quot;is %d.\n&quot;,highest);
+}
+	</pre>
+      </p>
+    </li>
+
+    <li>(5 Points) Use <code>objdump</code> (<em>not</em> gdb!) to disassemble both <code>main()</code> and <code>defineIntArray()</code> in <code>whole</code>.
+        Find the <code>call</code> to <code>defineIntArray()</code> in <code>main()</code>.
+        Show the math of how the number in that <code>call</code> instruction is used to compute the address where <code>defineIntArray()</code> actually is.
+      <p>
+<pre>
+0804856e &lt;main&gt;:
+ 804856e:	55                   	push   %ebp
+ 804856f:	89 e5                	mov    %esp,%ebp
+ 8048571:	83 e4 f0             	and    $0xfffffff0,%esp
+ 8048574:	83 ec 10             	sub    $0x10,%esp
+ 8048577:	e8 1c 00 00 00       	call   8048598 &lt;defineIntArray&gt;
+ 804857c:	e8 8c 00 00 00       	call   804860d &lt;printAllThenHighest&gt;
+ . . .
+08048598 &lt;defineIntArray&gt;:
+ 8048598:	55                   	push   %ebp
+
+           1   (carries)
+  00 00 00 1c  (number in called switched from little endian)
++ 08 04 85 7c  (address of NEXT instruction)
+-------------
+  08 04 85 98  (address of defineIntArray())
+</pre>
+      </p>
+    </li>
+
+    <li>(5 Points) Which segment of <code>p2.o</code> has string constant
+        used in <code>enterNum()</code>'s <code>getInteger()</code> call?<br>
+        Show this with <code>objdump</code>.
+      <p>
+<pre>
+$ <strong>objdump -s -j .rodata p2.o</strong>
+
+p2.o:     file format elf32-i386
+
+Contents of section .rodata:
+ 0000 54686520 68696768 65737420 6e756d62  The highest numb
+ 0010 6572206f 66207468 65206172 7261793a  er of the array:
+ 0020 00202564 25630069 73202564 2e0a00    . %d%c.is %d... 
+</pre>
+      </p>
+    </li>
+
+    <li>(5 Points) Can you find the memory for <code>enterNum()</code>&#39;s variable <code>i</code> using <code>objdump</code>?<br/>
+        If you can, use <code>objdump</code> to show where it is.<br/>
+        If you can&#39;t, tell why not.
+      <p>
+	<strong>
+	  It is a local variable, so it lives on the stack.
+	  Neither the stack nor the heap are in executables: they are for running processes.
+	</strong>
+      </p>
+    </li>
+
+    <li>(5 Points) Which segment of <code>p1.o</code> has the function <code>enterNum()</code>?<br>
+        Show this with <code>objdump</code>.
+        <p>
+	  <strong>
+<pre>
+$ objdump -d -j .text p1.o
+
+p1.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 &lt;enterNum&gt;:
+   0:	55                   	push   %ebp
+   1:	89 e5                	mov    %esp,%ebp
+   3:	81 ec 28 01 00 00    	sub    $0x128,%esp
+   9:	b8 00 00 00 00       	mov    $0x0,%eax
+   e:	8b 55 08             	mov    0x8(%ebp),%edx
+  11:	89 54 24 04          	mov    %edx,0x4(%esp)
+  15:	89 04 24             	mov    %eax,(%esp)
+  18:	e8 fc ff ff ff       	call   19 &lt;enterNum+0x19&gt;
+  1d:	a1 00 00 00 00       	mov    0x0,%eax
+  22:	89 44 24 08          	mov    %eax,0x8(%esp)
+  26:	c7 44 24 04 00 01 00 	movl   $0x100,0x4(%esp)
+  2d:	00 
+  2e:	8d 85 f4 fe ff ff    	lea    -0x10c(%ebp),%eax
+  34:	89 04 24             	mov    %eax,(%esp)
+  37:	e8 fc ff ff ff       	call   38 &lt;enterNum+0x38&gt;
+  3c:	8d 85 f4 fe ff ff    	lea    -0x10c(%ebp),%eax
+  42:	c7 44 24 08 0a 00 00 	movl   $0xa,0x8(%esp)
+  49:	00 
+  4a:	c7 44 24 04 00 00 00 	movl   $0x0,0x4(%esp)
+  51:	00 
+  52:	89 04 24             	mov    %eax,(%esp)
+  55:	e8 fc ff ff ff       	call   56 &lt;enterNum+0x56&gt;
+  5a:	89 45 f4             	mov    %eax,-0xc(%ebp)
+  5d:	8b 45 f4             	mov    -0xc(%ebp),%eax
+  60:	3b 45 08             	cmp    0x8(%ebp),%eax
+  63:	7c a4                	jl     9 &lt;enterNum+0x9&gt;
+  65:	8b 45 f4             	mov    -0xc(%ebp),%eax
+  68:	c9                   	leave  
+  69:	c3                   	ret    
+</pre>
+	  </strong>
+	</p>
+    </li>
+
+    <li>(5 Points) It is inelegant to redundantly redefine 
+<pre>//  PURPOSE:  To tell the maximum length of a C-string.
+#define		MAX_LENGTH	64
+</pre>
+        in both <code>p1.c</code> and <code>p2.c</code>.
+        What is a more elegant way of defining <code>MAX_LENGTH</code> just once and having both <code>p1.c</code> and <code>p2.c</code> use that single definition?
+     <p>
+       <strong>
+	 The most elegant thing to do is to put one definition of it in C header file, and to have both .c files include that header file.
+       </strong>
+     </p>
+    </li>
+    </ol>
+    
+  
+
+</li></ol></body></html>
